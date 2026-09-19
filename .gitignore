@@ -1,0 +1,12 @@
+.env
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.db
+.docker-local/
+# Workbooks can contain personal application information.
+data/*.xlsx
+!data/.gitkeep
