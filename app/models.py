@@ -30,12 +30,15 @@ class DiscoveryConfig(Base):
 class Job(Base):
     __tablename__ = "jobs"
     __table_args__ = (
-        CheckConstraint("status != 'Approved' OR human_approval = true", name="approval_required"),
+        CheckConstraint("status != 'Approved' OR human_approval = true OR (auto_approved = true AND resume_match_percent IS NOT NULL AND resume_match_percent >= 80)", name="approval_required"),
         CheckConstraint("match_score IS NULL OR (match_score >= 0 AND match_score <= 100)", name="score_range"),
         CheckConstraint("length(trim(job_id)) > 0", name="nonempty_job_id"),
         CheckConstraint("source_url IS NULL OR length(trim(source_url)) > 0", name="nonempty_source_url"),
         CheckConstraint("status IN ('New', 'Shortlisted', 'Approved', 'Applied', 'Interview', 'Rejected', 'Offer', 'Withdrawn')", name="valid_status"),
     )
+
+    auto_approved: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    resume_match_percent: Mapped[float | None] = mapped_column(Float)
 
     # The twelve business fields mirror the tracker; Company is a foreign key.
     job_id: Mapped[str] = mapped_column(String(200), primary_key=True)
@@ -77,3 +80,18 @@ class JobEvidence(Base):
     career_page: Mapped[str] = mapped_column(Text)
     description: Mapped[str] = mapped_column(Text)
     explanation: Mapped[dict] = mapped_column(JSON)
+
+
+class Resume(Base):
+    __tablename__ = "resumes"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    filename: Mapped[str] = mapped_column(Text)
+    text: Mapped[str] = mapped_column(Text)
+
+
+class ResumeAssessment(Base):
+    __tablename__ = "resume_assessments"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.job_id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    result: Mapped[dict] = mapped_column(JSON)

@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session
 
 from app.database import engine, get_db
 from app.discovery.routes import router as discovery_router
+from app.discovery.coverage import router as coverage_router
+from app.resumes import router as resume_router
 from app.importer import build_job, duplicate_job, import_companies, import_jobs, read_workbook
 from app.models import Company, DiscoveryConfig, DiscoveryRun, Job
 from app.schemas import CompanyRead, JobCreate, JobRead, JobUpdate, Status
@@ -23,8 +25,8 @@ async def lifespan(app):
     # Fail early if the explicit migration step has not completed.
     with engine.begin() as connection:
         revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        if revision != "0002":
-            raise RuntimeError("Run python -m app.migrate before starting Phase 2")
+        if revision != "0003":
+            raise RuntimeError("Run python -m app.migrate before starting Phase 3")
         # This pilot runs one API process. Runs interrupted by a previous shutdown
         # retain their committed company outcomes and are never reported complete.
         connection.execute(update(DiscoveryRun).where(DiscoveryRun.status == "running")
@@ -32,8 +34,10 @@ async def lifespan(app):
     yield
 
 
-app = FastAPI(title="Job Pipeline — Phase 2", lifespan=lifespan)
+app = FastAPI(title="Job Pipeline — Phase 3", lifespan=lifespan)
 app.include_router(discovery_router)
+app.include_router(resume_router)
+app.include_router(coverage_router)
 DB = Annotated[Session, Depends(get_db)]
 
 
@@ -109,6 +113,7 @@ def create_job(payload: JobCreate, db: DB):
         db.add(job)
         db.commit()
     except ValueError as exc:
+        db.rollback()
         raise HTTPException(422, str(exc)) from exc
     except IntegrityError as exc:
         db.rollback()
@@ -143,8 +148,10 @@ def update_job(job_id: str, changes: JobUpdate, db: DB):
     values = changes.model_dump(exclude_unset=True)
     status = values.get("status", job.status)
     approval = values.get("human_approval", job.human_approval)
-    if status == "Approved" and not approval:
+    if status == "Approved" and not (approval or job.auto_approved):
         raise HTTPException(422, "Approved status requires human_approval=true; change status when revoking approval")
+    if status != "Approved" or approval:
+        job.auto_approved = False
     for key, value in values.items():
         setattr(job, key, value)
     try:

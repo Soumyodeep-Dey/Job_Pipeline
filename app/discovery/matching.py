@@ -8,6 +8,8 @@ ALIASES = {
     "rest apis": ["rest api", "rest apis", "restful api", "restful apis"],
     "rag": ["rag", "retrieval augmented generation", "retrieval-augmented generation"],
     "mcp": ["mcp", "model context protocol"],
+    "software engineer": ["software engineer", "software development engineer", "sde"],
+    "full stack developer": ["full stack developer", "full-stack developer", "fullstack developer"],
 }
 ROLE_WORDS = re.compile(r"\b(engineer|developer|analyst|scientist|intern|consultant|administrator|specialist|researcher)\b", re.I)
 SENIORITY = {"senior", "staff", "principal", "lead", "manager", "director", "architect"}
@@ -38,7 +40,7 @@ def workbook_weights(configs):
 def experience_fit(title, description, maximum):
     text = title + " " + description
     # Only numbers attached to years are considered, not arbitrary JD numbers.
-    pattern = r"\b(\d{1,2})(?:(?:\s*[-–]\s*|\s+to\s+)(\d{1,2}))?\s*\+?\s*years?\b"
+    pattern = r"\b(\d{1,2})(?:(?:\s*[-–]\s*|\s+to\s+)(\d{1,2}))?\s*\+?\s*(?:years?|yrs?)\b"
     found = []
     for match in re.finditer(pattern, text, re.I):
         after = text[match.end():match.end() + 90].casefold()
@@ -69,7 +71,8 @@ def evaluate(posting, company, candidate, configs, weights):
                 not any(contains(s, known) for known in candidate.demonstrated_skills)]
     experience, experience_evidence = experience_fit(title, description, candidate.max_experience_years)
     locations = [loc for loc in candidate.locations if contains(posting["location"], loc)]
-    location = "match" if locations else "unknown" if not posting["location"].strip() or contains(posting["location"], "remote") else "mismatch"
+    remote_only = posting["location"].strip().casefold() in ("", "remote", "remote worldwide", "worldwide")
+    location = "match" if locations else "unknown" if remote_only else "mismatch"
     # Extract mentions only; a keyword occurrence does not establish a required skill.
     vocabulary = set(candidate.demonstrated_skills + candidate.adjacent_skills)
     for profile in company.keyword_profiles:

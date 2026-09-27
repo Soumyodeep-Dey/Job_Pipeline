@@ -2,7 +2,7 @@
 
 A Python, FastAPI and PostgreSQL project for discovering jobs and tracking applications, built in cumulative phases. **Phase 1 remains the foundation; Phase 2 adds discovery on top of it.**
 
-**Current implementation: Phase 2 discovery pilot.** Phase 1 imports, tracking APIs, filters, duplicate prevention and human approval remain available. There is no dedicated dashboard, scheduled discovery, résumé generation or application submission yet.
+**Current implementation: Phase 3 coverage and résumé matching.** Phase 1 imports, tracking APIs, filters and duplicate prevention remain available. Phase 3 automatically approves jobs at 80% or higher required-skill coverage against one imported résumé; lower or unknown coverage needs manual approval. There is no dedicated dashboard, scheduled discovery, résumé generation or application submission yet.
 
 ## All phases and documentation
 
@@ -10,7 +10,7 @@ A Python, FastAPI and PostgreSQL project for discovering jobs and tracking appli
 | --- | --- | --- | --- |
 | 1 — Data foundation | Excel inspection/imports, company and job tables, tracking APIs, approval rules, Docker and tests | Completed | [Phase 1](docs/PHASE1.md) |
 | 2 — Discovery pilot | Official source resolution, Greenhouse/Lever/Ashby feeds, explainable matching, evidence, run history and migrations | Completed as a pilot | [Phase 2](docs/PHASE2.md) |
-| 3 — Coverage and matching quality | Audit career URLs and missing profiles, improve role/experience/location interpretation, evaluate decisions, handle larger boards | Proposed; not implemented | Create `docs/PHASE3.md` when work starts |
+| 3 — Coverage and matching quality | Audit career URLs and missing profiles, improve role/experience/location interpretation, evaluate decisions, handle larger boards | Implemented with documented matching limits | [Phase 3](docs/PHASE3.md) |
 | 4 — Review dashboard | Company selection, discovery controls, job filters, descriptions, explanations and approval controls | Proposed; not implemented | Create `docs/PHASE4.md` when work starts |
 | 5 — Background automation | Workers, schedules, controlled retries, notifications and monitoring; decide whether n8n is useful | Proposed; not implemented | Create `docs/PHASE5.md` when work starts |
 | 6 — Application preparation and tracking | Verified profile facts, résumé versions, checklists, optional draft assistance and follow-ups | Proposed; not implemented | Create `docs/PHASE6.md` when work starts |
@@ -22,7 +22,8 @@ An optional Phase 8 for assisted or automatic submission would require separate 
 
 - **Imports and manual tracking:** [Phase 1 guide](docs/PHASE1.md), including workbook findings, the 12 tracker columns, endpoints and PowerShell examples.
 - **Upgrading or discovering jobs:** [Phase 2 guide](docs/PHASE2.md), including backup/restore instructions, migrations, the data-flow diagram, matching rules and discovery commands.
-- **Next development milestone:** Phase 3. Evaluate discovery coverage and matching quality before scheduling daily runs.
+- **Résumé import, automatic approval and coverage:** [Phase 3 guide](docs/PHASE3.md), including adding new résumés and the exact scoring formula.
+- **Next development milestone:** Phase 4 review dashboard.
 
 ## Run the current application
 
@@ -72,7 +73,9 @@ Job_Pipeline/
 ├── tests/                   # Tracking, discovery and migration tests
 ├── docs/
 │   ├── PHASE1.md            # Preserved foundation guide
-│   └── PHASE2.md            # Discovery pilot guide
+│   ├── PHASE2.md            # Discovery pilot guide
+│   └── PHASE3.md            # Coverage, resumes and approval
+├── resume/                  # Local PDFs; excluded from Git and image
 ├── backups/                 # Local backups; excluded from Git
 ├── Dockerfile
 ├── docker-compose.yml
@@ -97,6 +100,8 @@ docker compose down
 Normal shutdown retains the database volume. Do not add `--volumes` unless you intend to delete its data. Credentials, database backups and source workbooks are excluded from Git.
 
 Recorded verification at phase completion: **45 tests passed for Phase 1**, and **73 for Phase 2**. These are historical results, not fresh test runs. Full results and live-pilot limitations are retained in each phase guide.
+
+Phase 3 verification on 2026-09-27: **98 tests passed** across SQLite and PostgreSQL, Docker services healthy, and all four supplied PDF résumés imported with repeat-import deduplication verified. See [Phase 3](docs/PHASE3.md) for the matching limits and how to add new résumés.
 
 ## Documentation convention for future phases
 

@@ -1,3 +1,5 @@
+> Current-version note: [Phase 3](PHASE3.md) supersedes the human-only approval rule with résumé coverage of at least 80%. Earlier behavior and test counts below are historical.
+
 # Phase 1: data foundation and application tracking
 
 [Project overview and all phases](../README.md) | [Next: Phase 2 discovery](PHASE2.md)

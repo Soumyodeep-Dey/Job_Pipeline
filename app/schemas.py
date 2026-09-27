@@ -39,11 +39,6 @@ class JobCreate(BaseModel):
             raise ValueError("Source URL must be an absolute HTTP or HTTPS URL")
         return value
 
-    @model_validator(mode="after")
-    def approval_gate(self):
-        if self.status == "Approved" and not self.human_approval:
-            raise ValueError("Approved status requires human_approval=true")
-        return self
 
 
 class JobUpdate(BaseModel):

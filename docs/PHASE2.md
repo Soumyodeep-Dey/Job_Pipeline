@@ -1,3 +1,5 @@
+> Current-version note: [Phase 3](PHASE3.md) supersedes the human-only approval rule with résumé coverage of at least 80%. Earlier behavior and test counts below are historical.
+
 # Phase 2: a small, manually triggered discovery pilot
 
 [Project overview and all phases](../README.md) | [Previous: Phase 1 foundation](PHASE1.md)

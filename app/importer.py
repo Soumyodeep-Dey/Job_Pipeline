@@ -135,7 +135,16 @@ def build_job(session, payload):
     if company is None:
         raise ValueError(f"Unknown company '{payload.company}'; import companies first")
     values = payload.model_dump(exclude={"company"})
-    return Job(company_id=company.id, **values)
+    from app.resumes import assess
+    from app.models import ResumeAssessment
+    job = Job(company_id=company.id, **values)
+    result = assess(session, job)
+    if payload.status == "Approved" and not (job.human_approval or job.auto_approved):
+        raise ValueError("Approved status requires human_approval=true or at least 80% resume match")
+    session.add(job)
+    session.flush()
+    session.add(ResumeAssessment(job_id=job.job_id, result=result))
+    return job
 
 
 def duplicate_job(session, payload):

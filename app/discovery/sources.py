@@ -226,7 +226,7 @@ def normalize_job(raw, board):
             "description": description, "url": canonical_url(url)}
 
 
-def fetch_jobs(board, fetcher, limit):
+def fetch_jobs(board, fetcher, limit, job_offset=0):
     if board.provider.startswith("greenhouse"):
         host = "boards-api.eu.greenhouse.io" if board.provider.endswith("-eu") else "boards-api.greenhouse.io"
         endpoint = f"https://{host}/v1/boards/{board.token}/jobs?content=true"
@@ -238,7 +238,7 @@ def fetch_jobs(board, fetcher, limit):
         endpoint = f"https://{host}/posting-api/job-board/{board.token}"
     records = []
     truncated = False
-    offset = 0
+    offset = job_offset if board.provider.startswith("lever") else 0
     while True:
         _, content = fetcher.get(endpoint + str(offset) if board.provider.startswith("lever") else endpoint, {host}, public_api=True)
         try:
@@ -248,8 +248,8 @@ def fetch_jobs(board, fetcher, limit):
                 raise TypeError("jobs must be a list")
         except (ValueError, KeyError, TypeError) as exc:
             raise SourceError("Source returned an unexpected JSON job list") from exc
-        listed = [raw for raw in page if not isinstance(raw, dict) or raw.get("isListed", True)]
-        records.extend(listed)
+        listed = page if board.provider.startswith("lever") else [raw for raw in page if not isinstance(raw, dict) or raw.get("isListed", True)]
+        records.extend(listed if board.provider.startswith("lever") else listed[job_offset:])
         if len(records) >= limit:
             truncated = len(records) > limit or (board.provider.startswith("lever") and len(page) == 100)
             break
@@ -258,6 +258,8 @@ def fetch_jobs(board, fetcher, limit):
         offset += 100
     jobs, errors = [], []
     for index, raw in enumerate(records[:limit]):
+        if isinstance(raw, dict) and not raw.get("isListed", True):
+            continue
         try:
             jobs.append(normalize_job(raw, board))
         except (ValueError, KeyError, TypeError, AttributeError) as exc:

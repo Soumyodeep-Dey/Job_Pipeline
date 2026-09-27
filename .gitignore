@@ -11,3 +11,5 @@ htmlcov/
 data/*.xlsx
 !data/.gitkeep
 backups/
+
+resume/

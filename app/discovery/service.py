@@ -8,9 +8,10 @@ from sqlalchemy.exc import IntegrityError
 from app.discovery.matching import evaluate, workbook_weights
 from app.discovery.schemas import CandidateProfile
 from app.discovery.sources import Fetcher, SourceError, fetch_jobs, resolve_board
-from app.importer import duplicate_job
-from app.models import Company, DiscoveryConfig, DiscoveryRun, Job, JobEvidence, MatchingProfile
+from app.importer import duplicate_job, build_job
+from app.models import Company, DiscoveryConfig, DiscoveryRun, JobEvidence, MatchingProfile
 from app.schemas import JobCreate
+from app.resumes import explicit_requirements
 
 
 def get_profile(db):
@@ -32,7 +33,7 @@ def run_discovery(db, request):
     for company in companies:
         result = {"company_id": company.id, "company": company.name, "status": "completed",
                   "fetched": 0, "created": 0, "duplicates": 0, "irrelevant": 0, "excluded": 0,
-                  "review_required": 0, "errors": [], "truncated": False}
+                  "review_required": 0, "auto_approved": 0, "errors": [], "truncated": False}
         fetcher = Fetcher()
         try:
             if not company.keyword_profiles:
@@ -50,8 +51,9 @@ def run_discovery(db, request):
                 result["source_attempts"] = attempts
                 raise SourceError("No supported board resolved from the company's official career pages")
             result.update(provider=board.provider, board_url=board.url, career_page=career_page)
-            jobs, errors, truncated = fetch_jobs(board, fetcher, request.max_jobs_per_company)
+            jobs, errors, truncated = fetch_jobs(board, fetcher, request.max_jobs_per_company, request.job_offset)
             result.update(fetched=len(jobs), errors=errors, truncated=truncated)
+            result["next_offset"] = request.job_offset + request.max_jobs_per_company if truncated else None
             for posting in jobs:
                 explanation = evaluate(posting, company, candidate, configs, weights)
                 if explanation["disposition"] == "irrelevant":
@@ -63,6 +65,7 @@ def run_discovery(db, request):
                 payload = JobCreate(job_id=job_id, company=company.name, role=posting["title"],
                     location=posting["location"] or None, match_score=explanation["score"],
                     source_url=posting["url"], date_found=date.today(),
+                    required_skills=explicit_requirements(posting["description"]),
                     # Skill keyword mentions are exposed in evidence, not asserted as requirements.
                     status="Rejected" if explanation["disposition"] == "excluded" else "New",
                     human_approval=False)
@@ -71,14 +74,18 @@ def run_discovery(db, request):
                     continue
                 try:
                     with db.begin_nested():
-                        db.add(Job(company_id=company.id, **payload.model_dump(exclude={"company"})))
+                        job = build_job(db, payload)
+                        db.add(job)
                         db.flush()
                         db.add(JobEvidence(job_id=job_id, run_id=run.id, provider=board.provider,
                             board_url=board.url, career_page=career_page, description=posting["description"],
                             explanation=explanation))
                         db.flush()
                     result["created"] += 1
-                    result[explanation["disposition"]] += 1
+                    if job.auto_approved:
+                        result["auto_approved"] += 1
+                    else:
+                        result[explanation["disposition"]] += 1
                 except IntegrityError:
                     if duplicate_job(db, payload):
                         result["duplicates"] += 1

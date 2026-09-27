@@ -25,6 +25,7 @@ class CandidateProfile(BaseModel):
 class DiscoveryRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     company_ids: list[int] = Field(min_length=1, max_length=5)
+    job_offset: int = Field(default=0, ge=0, le=100000)
     max_jobs_per_company: int = Field(default=100, ge=1, le=300)
 
     @field_validator("company_ids")
