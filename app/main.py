@@ -1,16 +1,18 @@
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse
-from sqlalchemy import select, text
+from sqlalchemy import select, text, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.database import Base, engine, get_db
+from app.database import engine, get_db
+from app.discovery.routes import router as discovery_router
 from app.importer import build_job, duplicate_job, import_companies, import_jobs, read_workbook
-from app.models import Company, DiscoveryConfig, Job
+from app.models import Company, DiscoveryConfig, DiscoveryRun, Job
 from app.schemas import CompanyRead, JobCreate, JobRead, JobUpdate, Status
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -18,12 +20,20 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 @asynccontextmanager
 async def lifespan(app):
-    # Phase 1 bootstrap only. Use migrations when changing an existing database schema.
-    Base.metadata.create_all(engine)
+    # Fail early if the explicit migration step has not completed.
+    with engine.begin() as connection:
+        revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
+        if revision != "0002":
+            raise RuntimeError("Run python -m app.migrate before starting Phase 2")
+        # This pilot runs one API process. Runs interrupted by a previous shutdown
+        # retain their committed company outcomes and are never reported complete.
+        connection.execute(update(DiscoveryRun).where(DiscoveryRun.status == "running")
+                           .values(status="interrupted", finished_at=datetime.now(timezone.utc)))
     yield
 
 
-app = FastAPI(title="Job Pipeline — Phase 1", lifespan=lifespan)
+app = FastAPI(title="Job Pipeline — Phase 2", lifespan=lifespan)
+app.include_router(discovery_router)
 DB = Annotated[Session, Depends(get_db)]
 
 

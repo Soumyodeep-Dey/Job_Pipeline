@@ -10,3 +10,4 @@ htmlcov/
 # Workbooks can contain personal application information.
 data/*.xlsx
 !data/.gitkeep
+backups/
