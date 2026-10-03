@@ -3,6 +3,7 @@ from hashlib import sha256
 from io import BytesIO
 from pathlib import Path
 import re
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel, ConfigDict, Field
@@ -15,6 +16,10 @@ from app.models import Job, Resume, ResumeAssessment
 
 router = APIRouter()
 RESUME_DIR = Path(__file__).resolve().parent.parent / "resume"
+
+
+def master_resume_id():
+    return os.getenv("MASTER_RESUME_ID", "").strip() or None
 
 
 def explicit_requirements(description):
@@ -47,6 +52,11 @@ def resume_contains(text, skill):
 def assess(db, job, resume_id=None):
     requirements = skills_list(job.required_skills)
     resumes = list(db.scalars(select(Resume).order_by(Resume.id)))
+    master = master_resume_id()
+    if master:
+        if resume_id and resume_id != master:
+            raise ValueError("This workspace uses the configured master résumé; choose that version")
+        resumes = [r for r in resumes if r.id == master]
     if resume_id:
         resumes = [r for r in resumes if r.id == resume_id]
         if not resumes:
@@ -127,8 +137,11 @@ def import_resumes(db: Session = Depends(get_db), file: UploadFile | None = File
 
 
 @router.get("/resumes")
-def list_resumes(db: Session = Depends(get_db)):
-    return [{"id": r.id, "filename": r.filename} for r in db.scalars(select(Resume).order_by(Resume.filename))]
+def list_resumes(include_archived: bool = False, db: Session = Depends(get_db)):
+    query = select(Resume).order_by(Resume.filename)
+    if master_resume_id() and not include_archived:
+        query = query.where(Resume.id == master_resume_id())
+    return [{"id": r.id, "filename": r.filename} for r in db.scalars(query)]
 
 
 class AssessmentRequest(BaseModel):

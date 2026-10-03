@@ -95,3 +95,58 @@ class ResumeAssessment(Base):
     job_id: Mapped[str] = mapped_column(ForeignKey("jobs.job_id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     result: Mapped[dict] = mapped_column(JSON)
+
+
+class DiscoverySchedule(Base):
+    __tablename__ = "discovery_schedules"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    payload: Mapped[dict] = mapped_column(JSON)
+    interval_minutes: Mapped[int] = mapped_column()
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class BackgroundTask(Base):
+    __tablename__ = "background_tasks"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    schedule_id: Mapped[str | None] = mapped_column(ForeignKey("discovery_schedules.id"))
+    payload: Mapped[dict] = mapped_column(JSON)
+    status: Mapped[str] = mapped_column(String(30), index=True)
+    attempts: Mapped[int] = mapped_column(default=0)
+    run_ids: Mapped[list] = mapped_column(JSON, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    available_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error: Mapped[str | None] = mapped_column(Text)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    task_id: Mapped[str] = mapped_column(ForeignKey("background_tasks.id"), unique=True)
+    message: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    read: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class WorkerState(Base):
+    __tablename__ = "worker_state"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    last_seen: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class ApplicationPreparation(Base):
+    __tablename__ = "application_preparations"
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.job_id"), primary_key=True)
+    resume_id: Mapped[str] = mapped_column(ForeignKey("resumes.id"))
+    verified_facts: Mapped[list] = mapped_column(JSON, default=list)
+    checklist: Mapped[dict] = mapped_column(JSON, default=dict)
+    draft: Mapped[str] = mapped_column(Text, default="")
+    notes: Mapped[str] = mapped_column(Text, default="")
+    submitted_on: Mapped[date | None] = mapped_column(Date)
+    channel: Mapped[str | None] = mapped_column(String(100))
+    reference: Mapped[str | None] = mapped_column(Text)
+    submission_snapshot: Mapped[dict | None] = mapped_column(JSON)
+    follow_up_on: Mapped[date | None] = mapped_column(Date, index=True)
+    follow_up_done: Mapped[bool] = mapped_column(Boolean, default=False)

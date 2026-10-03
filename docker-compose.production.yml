@@ -1,0 +1,46 @@
+# Compose 2.24.4+; overlay on docker-compose.yml. Configure DNS before starting.
+services:
+  db:
+    ports: !reset []
+    logging:
+      options: {max-size: "10m", max-file: "3"}
+  api:
+    ports: !reset []
+    environment:
+      DEPLOYMENT_MODE: production
+      PUBLIC_ORIGIN: https://${APP_DOMAIN:?Set APP_DOMAIN to your server hostname}
+      ALLOWED_HOSTS: localhost,127.0.0.1,${APP_DOMAIN:?Set APP_DOMAIN}
+      PYTHONDONTWRITEBYTECODE: "1"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      options: {max-size: "10m", max-file: "3"}
+  worker:
+    environment:
+      PYTHONDONTWRITEBYTECODE: "1"
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    logging:
+      options: {max-size: "10m", max-file: "3"}
+  proxy:
+    image: caddy:2-alpine
+    ports: ["80:80", "443:443"]
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      options: {max-size: "10m", max-file: "3"}
+volumes:
+  caddy_data:
+  caddy_config:

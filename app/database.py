@@ -9,7 +9,8 @@ load_dotenv()
 DATABASE_URL = os.getenv(
     "DATABASE_URL", "postgresql+psycopg://job_pipeline:local_password@localhost:5432/job_pipeline"
 )
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True,
+                       connect_args={"connect_timeout": 10} if DATABASE_URL.startswith("postgresql") else {})
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 

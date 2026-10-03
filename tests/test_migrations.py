@@ -19,7 +19,9 @@ def test_migrate_fresh_and_adopt_phase1(tmp_path):
         command.upgrade(config, "head")
         assert connection.execute(text("SELECT name FROM companies WHERE id=1")).scalar() == "Existing"
         assert connection.execute(text("SELECT status FROM jobs WHERE job_id='preserved'")).scalar() == "Approved"
-        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0003"
+        assert connection.execute(text("SELECT version_num FROM alembic_version")).scalar() == "0005"
+        assert {"background_tasks", "discovery_schedules", "notifications", "worker_state"}.issubset(inspect(connection).get_table_names())
         assert {"discovery_runs", "job_evidence", "matching_profiles"}.issubset(inspect(connection).get_table_names())
         assert len(inspect(connection).get_columns("jobs")) == 14
+        assert "application_preparations" in inspect(connection).get_table_names()
     engine.dispose()

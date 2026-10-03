@@ -12,6 +12,7 @@ ALIASES = {
     "full stack developer": ["full stack developer", "full-stack developer", "fullstack developer"],
 }
 ROLE_WORDS = re.compile(r"\b(engineer|developer|analyst|scientist|intern|consultant|administrator|specialist|researcher)\b", re.I)
+TECHNICAL_TITLE = re.compile(r"\b(software|sde|frontend|front.end|backend|back.end|full.stack|data|ai|machine learning|security|devops|platform)\b", re.I)
 SENIORITY = {"senior", "staff", "principal", "lead", "manager", "director", "architect"}
 
 
@@ -66,6 +67,8 @@ def evaluate(posting, company, candidate, configs, weights):
     roles = [k for k in keywords if ROLE_WORDS.search(k)]
     title_matches = [k for k in roles if contains(title, k)]
     hits = [k for k in exclusions if contains(title if k.casefold() in SENIORITY else text, k)]
+    if not company.keyword_profiles:
+        hits = [term for term in sorted(SENIORITY) if contains(title, term)]
     strong = [s for s in candidate.demonstrated_skills if contains(text, s)]
     adjacent = [s for s in candidate.adjacent_skills if contains(text, s) and
                 not any(contains(s, known) for known in candidate.demonstrated_skills)]
@@ -94,6 +97,14 @@ def evaluate(posting, company, candidate, configs, weights):
         "exclusion": weights["exclusion"] if hits else 0,
     }
     flags = ["Verify work authorization and the live description before applying"]
+    # Discovery recall is separate from approval. Keep plausible technical India
+    # openings visible when exact role wording or the workbook profile is missing.
+    fallback = bool(TECHNICAL_TITLE.search(title) and location == "match" and
+                    (not company.keyword_profiles or len(strong) >= 2))
+    if not title_matches and fallback:
+        flags.append("Role title did not match workbook phrases; technical candidate retained for manual review")
+    if not company.keyword_profiles:
+        flags.append("Company is listed in Excel but has no keyword profile; workbook role/exclusion fit is unverified")
     if not description:
         flags.append("Job description missing")
     if experience != "match":
@@ -103,11 +114,13 @@ def evaluate(posting, company, candidate, configs, weights):
     if hits:
         flags.append("Workbook exclusion terms matched; inspect context")
     disposition = "review_required"
-    if not title_matches:
+    if not title_matches and not fallback:
         disposition = "irrelevant"
     elif hits or experience == "mismatch" or location == "mismatch":
         disposition = "excluded"
     score = max(0, min(100, sum(points.values())))
+    if not company.keyword_profiles:
+        score = 0
     if disposition in ("excluded", "irrelevant"):
         score = 0
     return {

@@ -17,6 +17,8 @@ class CandidateProfile(BaseModel):
     @field_validator("demonstrated_skills", "adjacent_skills", "locations")
     @classmethod
     def clean_list(cls, values):
+        if any(value.strip().casefold() in {"string", "example", "placeholder"} for value in values):
+            raise ValueError("Replace API example placeholders with actual skills or locations")
         if any(not value.strip() or len(value) > 100 for value in values):
             raise ValueError("Entries must be nonblank strings of at most 100 characters")
         return list(dict.fromkeys(value.strip() for value in values))

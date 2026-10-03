@@ -19,14 +19,14 @@ def get_profile(db):
     return CandidateProfile(**stored.settings) if stored else CandidateProfile()
 
 
-def run_discovery(db, request):
+def run_discovery(db, request, run_id=None):
     companies = [db.get(Company, identifier) for identifier in request.company_ids]
     if any(company is None for company in companies):
         raise ValueError("Unknown company ID; list /companies and select existing IDs")
     configs = {config.sheet: config for config in db.scalars(select(DiscoveryConfig))}
     weights = workbook_weights(configs)
     candidate = get_profile(db)
-    run = DiscoveryRun(id=str(uuid4()), status="running", profile_snapshot=candidate.model_dump(), results=[])
+    run = DiscoveryRun(id=run_id or str(uuid4()), status="running", profile_snapshot=candidate.model_dump(), results=[])
     db.add(run)
     db.commit()
     results = []
@@ -36,8 +36,6 @@ def run_discovery(db, request):
                   "review_required": 0, "auto_approved": 0, "errors": [], "truncated": False}
         fetcher = Fetcher()
         try:
-            if not company.keyword_profiles:
-                raise SourceError("No company keyword profile in the workbook; configure the source workbook and reimport")
             board = None
             attempts = []
             # Cross-domain companies may have several official URLs. Try at most three.
@@ -65,7 +63,7 @@ def run_discovery(db, request):
                 payload = JobCreate(job_id=job_id, company=company.name, role=posting["title"],
                     location=posting["location"] or None, match_score=explanation["score"],
                     source_url=posting["url"], date_found=date.today(),
-                    required_skills=explicit_requirements(posting["description"]),
+                    required_skills=explicit_requirements(posting["description"]) if explanation["title_matches"] and explanation["disposition"] == "review_required" else None,
                     # Skill keyword mentions are exposed in evidence, not asserted as requirements.
                     status="Rejected" if explanation["disposition"] == "excluded" else "New",
                     human_approval=False)

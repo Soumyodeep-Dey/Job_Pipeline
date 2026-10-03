@@ -13,6 +13,11 @@ from app.main import app
 from app.models import Company
 
 
+@pytest.fixture(autouse=True)
+def isolate_master_selection(monkeypatch):
+    monkeypatch.delenv("MASTER_RESUME_ID", raising=False)
+
+
 @pytest.fixture(params=["sqlite", "postgres"] if os.getenv("TEST_POSTGRES") == "1" else ["sqlite"])
 def session_factory(request):
     schema = None
@@ -45,14 +50,20 @@ def session_factory(request):
 
 
 @pytest.fixture
-def client(session_factory):
+def client(session_factory, monkeypatch):
+    monkeypatch.setenv("AUTH_USERNAME", "test-owner")
+    monkeypatch.setenv("AUTH_PASSWORD", "test-password-long-enough-for-tests")
+    monkeypatch.delenv("PUBLIC_ORIGIN", raising=False)
+    monkeypatch.setenv("DEPLOYMENT_MODE", "local")
     def override_db():
         with session_factory() as db:
             yield db
 
     app.dependency_overrides[get_db] = override_db
     # Tables are created above; do not run the production PostgreSQL startup hook.
-    client = TestClient(app)
+    app.middleware_stack = None
+    client = TestClient(app, base_url="http://localhost")
+    client.auth = ("test-owner", "test-password-long-enough-for-tests")
     yield client
     client.close()
     app.dependency_overrides.clear()

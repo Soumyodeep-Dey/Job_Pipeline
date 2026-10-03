@@ -1,0 +1,85 @@
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#20332f;background:#f4f6f2;font-size:14px}
+*{box-sizing:border-box}
+body{margin:0;display:flex}
+aside{width:250px;position:fixed;inset:0 auto 0 0;background:#183e34;color:#dae9df;padding:38px 24px;display:flex;flex-direction:column}
+.brand{font-size:22px;font-weight:750;color:#fff;display:flex;align-items:center;gap:14px;text-decoration:none}
+.brand span{font-size:19px}
+.eyebrow{font-size:10px;letter-spacing:1.6px;font-weight:700;margin:36px 0 16px;color:#77958a}
+nav{display:grid;gap:8px}
+nav button{background:transparent;color:#d4e3dc;text-align:left;padding:15px;border:0}
+nav button.active{background:#315548;color:#fff}
+.aside-foot{margin-top:auto;font-size:12px}
+.aside-foot p{color:#9bb2a6}
+.aside-foot a{color:#d4e3dc}
+.dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#b9dd8a;margin-right:7px}
+main{margin-left:250px;padding:30px 44px;max-width:1700px;width:calc(100% - 250px)}
+header{display:flex;justify-content:space-between;align-items:center}
+header .eyebrow{margin:0 0 10px}
+h1{font-size:30px;font-weight:650;letter-spacing:-1px;margin:0}
+h2{font-size:19px;letter-spacing:-.3px}
+p{line-height:1.6}
+.intro{padding:20px 0 26px}
+.intro h2{font-size:32px;font-weight:500;margin:6px 0}
+.intro p{color:#68776e;margin:8px 0}
+.policy{display:inline-block;background:#e6edde;border:1px solid #d4e0cb;padding:10px 14px;border-radius:7px;font-size:12px;margin-top:12px}
+button{border:1px solid transparent;border-radius:7px;padding:10px 15px;font:inherit;font-weight:600;background:#225d49;color:white;cursor:pointer}
+button:hover{filter:brightness(.94)}
+button:disabled{opacity:.45;cursor:wait}
+.secondary{background:white;color:#355449;border:1px solid #d7e1d8}
+label{display:grid;gap:7px;font-size:12px;color:#587064}
+input,select,textarea{border:1px solid #d6dfd6;border-radius:6px;background:white;padding:10px;color:#253c30;font:inherit;max-width:100%;width:100%}
+textarea{min-height:92px;resize:vertical}
+button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid #d09b40;outline-offset:3px}
+.filters{display:flex;gap:12px;align-items:end;flex-wrap:wrap;background:#fff;padding:18px;border:1px solid #e1e7df;border-radius:10px}
+.filters label{flex:1;min-width:130px}
+.workspace{display:grid;grid-template-columns:minmax(260px,.9fr) minmax(350px,1.3fr);gap:24px;margin-top:25px}
+.section-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:20px 0 10px}
+.section-heading h2{margin:0}
+.section-heading span{font-size:12px;color:#667d6c}
+.card{background:#fff;border:1px solid #dee5da;padding:24px;border-radius:12px;margin-bottom:12px}
+.job-list{display:grid;gap:10px}
+.job-card{text-align:left;background:white;color:#203c2d;padding:19px;border:1px solid #dce4d8;border-radius:10px;display:block;width:100%}
+.job-card.selected{border:2px solid #447e5a;background:#edf4e9}
+.job-card strong{font-size:16px;display:block;margin:7px 0}
+.job-card small{color:#617766;font-weight:400}
+.badge{display:inline-block;padding:4px 8px;border-radius:4px;background:#e9efe3;color:#40613e;font-size:11px;font-weight:650;margin:4px 5px 4px 0}
+.detail{margin-top:20px;align-self:start;min-height:300px}
+.detail h2{font-size:25px;margin:8px 0}
+.muted,.empty{color:#748273;font-size:13px}
+.empty{padding:30px 0;text-align:center}
+.pager{display:flex;justify-content:space-between;gap:10px;margin-top:16px}
+#notice{min-height:23px;font-size:13px;color:#3d674b;margin:18px 0 0}
+#notice.error{color:#a3362d}
+.company-list{max-height:340px;overflow:auto;margin:15px 0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.company-choice{display:flex;align-items:center;gap:10px;padding:10px;background:#f5f7f2;border-radius:6px}
+.company-choice input{width:auto}
+.company-choice span{line-height:1.5}
+.company-choice small{display:block;color:#8b5b38}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+details{border-top:1px solid #e0e7dc;padding:15px 0}
+summary{cursor:pointer;font-weight:600}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font:12px/1.7 ui-monospace,monospace;background:#f5f7f3;padding:14px;border-radius:6px;max-height:450px;overflow:auto}
+.description{white-space:pre-wrap;max-height:350px;overflow:auto;line-height:1.7}
+.detail form{margin:20px 0;display:grid;gap:12px}
+.detail a{color:#276950}
+footer{font-size:11px;color:#748473;padding:35px 0 10px;border-top:1px solid #dde5d8;margin-top:35px}
+[hidden]{display:none!important}
+@media(max-width:1000px){aside{width:200px;padding:28px 16px}
+main{margin-left:200px;width:calc(100% - 200px);padding:24px}
+.workspace{grid-template-columns:1fr}
+.detail{margin-top:0}
+}
+@media(max-width:650px){body{display:block}
+aside{position:static;width:100%;padding:18px}
+aside .eyebrow,.aside-foot{display:none}
+nav{display:flex;flex-wrap:wrap;margin-top:15px}
+nav button{padding:8px;font-size:11px}
+main{margin:0;width:100%;padding:20px}
+header{gap:12px}
+h1{font-size:25px}
+.intro h2{font-size:27px}
+.company-list{grid-template-columns:1fr}
+.filters{padding:12px}
+.workspace{display:block}
+}
+

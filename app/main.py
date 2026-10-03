@@ -1,11 +1,16 @@
 from contextlib import asynccontextmanager
-from datetime import datetime, timezone
+import os
+from starlette.middleware.trustedhost import TrustedHostMiddleware
+from app.security import SecurityMiddleware, validate_security
+from app.operations import router as operations_router
 from pathlib import Path
 from typing import Annotated
+from typing import Literal
 
 from fastapi import Depends, FastAPI, File, HTTPException, Query, UploadFile
-from fastapi.responses import JSONResponse
-from sqlalchemy import select, text, update
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -13,8 +18,10 @@ from app.database import engine, get_db
 from app.discovery.routes import router as discovery_router
 from app.discovery.coverage import router as coverage_router
 from app.resumes import router as resume_router
+from app.applications import router as application_router
+from app.automation_routes import router as automation_router
 from app.importer import build_job, duplicate_job, import_companies, import_jobs, read_workbook
-from app.models import Company, DiscoveryConfig, DiscoveryRun, Job
+from app.models import Company, DiscoveryConfig, Job
 from app.schemas import CompanyRead, JobCreate, JobRead, JobUpdate, Status
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
@@ -22,22 +29,33 @@ DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 @asynccontextmanager
 async def lifespan(app):
+    validate_security()
     # Fail early if the explicit migration step has not completed.
     with engine.begin() as connection:
         revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        if revision != "0003":
-            raise RuntimeError("Run python -m app.migrate before starting Phase 3")
-        # This pilot runs one API process. Runs interrupted by a previous shutdown
-        # retain their committed company outcomes and are never reported complete.
-        connection.execute(update(DiscoveryRun).where(DiscoveryRun.status == "running")
-                           .values(status="interrupted", finished_at=datetime.now(timezone.utc)))
+        if revision != "0005":
+            raise RuntimeError("Run python -m app.migrate before starting Phase 7")
+        # Worker-owned tasks can outlive API restarts. Recovery belongs to the worker.
     yield
 
 
-app = FastAPI(title="Job Pipeline — Phase 3", lifespan=lifespan)
+app = FastAPI(title="Job Pipeline — Phase 7", lifespan=lifespan)
+app.add_middleware(SecurityMiddleware)
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(","))
+app.include_router(operations_router)
+STATIC_DIR = Path(__file__).resolve().parent / "static"
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+def dashboard():
+    return FileResponse(STATIC_DIR / "index.html")
+
 app.include_router(discovery_router)
 app.include_router(resume_router)
 app.include_router(coverage_router)
+app.include_router(automation_router)
+app.include_router(application_router)
 DB = Annotated[Session, Depends(get_db)]
 
 
@@ -104,6 +122,14 @@ def job_response(job, company):
     return {field: getattr(job, field) for field in JobRead.model_fields if field != "company"} | {"company": company}
 
 
+@app.get("/dashboard/jobs/{job_id}", response_model=JobRead)
+def dashboard_job(job_id: str, db: DB):
+    job = db.get(Job, job_id)
+    if job is None:
+        raise HTTPException(404, "Job not found")
+    return job_response(job, db.get(Company, job.company_id).name)
+
+
 @app.post("/jobs", response_model=JobRead, status_code=201)
 def create_job(payload: JobCreate, db: DB):
     if duplicate_job(db, payload):
@@ -126,6 +152,7 @@ def list_jobs(
     db: DB, company: str | None = None, status: Status | None = None,
     location: str | None = None, min_match_score: float | None = Query(None, ge=0, le=100),
     offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=500),
+    scope: Literal["all", "india", "history"] = "all",
 ):
     query = select(Job, Company.name).join(Company)
     if company:
@@ -136,7 +163,14 @@ def list_jobs(
         query = query.where(Job.location.icontains(location.strip(), autoescape=True))
     if min_match_score is not None:
         query = query.where(Job.match_score >= min_match_score)
-    rows = db.execute(query.order_by(Job.date_found.desc(), Job.job_id).offset(offset).limit(limit))
+    query = query.order_by(Job.date_found.desc(), Job.job_id)
+    if scope == "all":
+        rows = db.execute(query.offset(offset).limit(limit))
+    else:
+        from app.discovery.location import india_opportunity
+        # Apply the same word-boundary policy before pagination on both databases.
+        rows = [row for row in db.execute(query)
+                if india_opportunity(row[0]) == (scope == "india")][offset:offset + limit]
     return [job_response(job, name) for job, name in rows]
 
 

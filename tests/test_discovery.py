@@ -63,6 +63,20 @@ def test_boundary_alias_and_experience_matching():
     assert evaluate_job(description="Work alongside senior developers and lead discussions.")["exclusion_matches"] == []
 
 
+def test_india_technical_fallback_does_not_relax_exclusions():
+    result = evaluate_job(title="SDE Intern - Frontend")
+    assert result['disposition'] == 'review_required'
+    assert result['title_matches'] == []
+    assert any('manual review' in flag for flag in result['review_flags'])
+    assert evaluate_job(title="Senior SDE - Frontend")['disposition'] == 'excluded'
+    assert evaluate_job(title="SDE Intern", location="London")['disposition'] == 'irrelevant'
+    company = SimpleNamespace(keyword_profiles=[])
+    result = evaluate(posting(title="Associate Software Development Engineer"), company, CandidateProfile(), {}, WEIGHTS)
+    assert result['disposition'] == 'review_required' and result['score'] == 0
+    assert evaluate(posting(title="Staff Software Engineer"), company, CandidateProfile(), {}, WEIGHTS)['disposition'] == 'excluded'
+    assert evaluate(posting(title="Account Executive"), company, CandidateProfile(), {}, WEIGHTS)['disposition'] == 'irrelevant'
+
+
 class FakeFetcher:
     def __init__(self, pages=None):
         self.pages = pages or {}
@@ -271,6 +285,27 @@ def test_discovery_failure_recorded(client, discovery_seed, monkeypatch):
     run = client.post("/discovery/runs", json={"company_ids": [discovery_seed]}).json()
     assert run["status"] == "failed" and run["finished_at"]
     assert run["results"][0]["errors"] == ["Network unavailable"]
+
+
+@pytest.mark.parametrize('title,missing_profile,expected', [
+    ('SDE Intern - Frontend', False, 'New'),
+    ('Associate Software Engineer', True, 'New'),
+    ('Senior Backend Engineer', False, 'Rejected'),
+])
+def test_unverified_or_excluded_discovery_cannot_auto_approve(client, session_factory, discovery_seed, monkeypatch, title, missing_profile, expected):
+    from app.models import Resume
+    with session_factory() as db:
+        db.add(Resume(id='strong-resume', filename='resume.pdf', text='Python SQL'))
+        if missing_profile:
+            db.get(Company, discovery_seed).keyword_profiles = []
+        db.commit()
+    monkeypatch.setattr(service, 'Fetcher', FakeFetcher)
+    monkeypatch.setattr(service, 'fetch_jobs', lambda *args: ([posting(title=title, description='Required skills: Python, SQL')], [], False))
+    assert client.post('/discovery/runs', json={'company_ids': [discovery_seed]}).status_code == 201
+    job = client.get('/jobs').json()[0]
+    assert job['status'] == expected
+    assert job['required_skills'] is None
+    assert client.get(f"/jobs/{job['job_id']}/approval").json()['automatic_approval'] is False
 
 
 def test_profile_and_input_validation(client):
