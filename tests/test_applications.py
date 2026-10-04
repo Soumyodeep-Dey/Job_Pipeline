@@ -24,6 +24,26 @@ def submission():
             "follow_up_on": str(today())}
 
 
+def test_external_receipt_records_fact_without_claiming_approval(client, prepared):
+    body = submission() | {'resume_id': 'strong', 'reference': 'Employer confirmation email 123'}
+    result = client.post('/jobs/apply/application-receipt', json=body)
+    assert result.status_code == 201, result.text
+    prep = result.json()['preparation']
+    assert prep['checklist'] == {}
+    assert prep['submission_snapshot']['recording_method'] == 'external_receipt'
+    assert not prep['submission_snapshot']['human_approval']
+    assert client.get('/dashboard/jobs/apply').json()['status'] == 'Applied'
+    assert len(client.get('/applications').json()) == 1
+    assert client.post('/jobs/apply/application-receipt', json=body).status_code == 409
+
+
+def test_external_receipt_requires_reference_and_existing_resume(client, prepared):
+    body = submission() | {'resume_id': 'absent', 'reference': 'Employer confirmation'}
+    assert client.post('/jobs/apply/application-receipt', json=body).status_code == 422
+    body.update(resume_id='strong', reference=' ')
+    assert client.post('/jobs/apply/application-receipt', json=body).status_code == 422
+
+
 def test_auto_approval_submission_freezes_exact_version(client, prepared):
     result = client.put('/jobs/apply/preparation', json=prepared)
     assert result.status_code == 200, result.text

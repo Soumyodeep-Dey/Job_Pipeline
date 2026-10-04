@@ -56,6 +56,8 @@ app.include_router(resume_router)
 app.include_router(coverage_router)
 app.include_router(automation_router)
 app.include_router(application_router)
+from app.targets import router as targets_router
+app.include_router(targets_router)
 DB = Annotated[Session, Depends(get_db)]
 
 
@@ -153,6 +155,7 @@ def list_jobs(
     location: str | None = None, min_match_score: float | None = Query(None, ge=0, le=100),
     offset: int = Query(0, ge=0), limit: int = Query(50, ge=1, le=500),
     scope: Literal["all", "india", "history"] = "all",
+    target_only: bool = False,
 ):
     query = select(Job, Company.name).join(Company)
     if company:
@@ -164,13 +167,17 @@ def list_jobs(
     if min_match_score is not None:
         query = query.where(Job.match_score >= min_match_score)
     query = query.order_by(Job.date_found.desc(), Job.job_id)
-    if scope == "all":
+    if scope == "all" and not target_only:
         rows = db.execute(query.offset(offset).limit(limit))
     else:
         from app.discovery.location import india_opportunity
+        from app.discovery.matching import target_role_matches
+        from app.discovery.service import get_profile
+        roles = get_profile(db).target_roles if target_only else []
         # Apply the same word-boundary policy before pagination on both databases.
         rows = [row for row in db.execute(query)
-                if india_opportunity(row[0]) == (scope == "india")][offset:offset + limit]
+                if (scope == "all" or india_opportunity(row[0]) == (scope == "india"))
+                and (not roles or target_role_matches(row[0].role, roles))][offset:offset + limit]
     return [job_response(job, name) for job, name in rows]
 
 

@@ -65,6 +65,13 @@ class FollowUpInput(StrictModel):
     done: bool = False
 
 
+class ReceiptInput(SubmissionInput):
+    """Record an already completed external action without inventing readiness checks."""
+    resume_id: str = Field(min_length=1, max_length=64)
+    reference: str = Field(min_length=1, max_length=1000)
+    notes: str = Field(default="", max_length=10000)
+
+
 def get_job(db, job_id, lock=False):
     statement = select(Job).where(Job.job_id == job_id)
     job = db.scalar(statement.with_for_update() if lock else statement)
@@ -75,6 +82,11 @@ def get_job(db, job_id, lock=False):
 
 def readiness(db, job, preparation):
     blockers = []
+    from app.discovery.service import get_profile
+    from app.discovery.matching import target_role_matches
+    roles = get_profile(db).target_roles
+    if roles and not target_role_matches(job.role, roles) and not (preparation and preparation.submitted_on):
+        blockers.append("Job is outside the current target designations")
     score = None
     if preparation:
         if master_resume_id() and preparation.resume_id != master_resume_id() and not preparation.submitted_on:
@@ -190,6 +202,39 @@ def applications(db: DB, due_only: bool = False, limit: int = Query(50, ge=1, le
              "follow_up_on": prep.follow_up_on, "follow_up_done": prep.follow_up_done,
              "due": bool(prep.follow_up_on and prep.follow_up_on <= today() and not prep.follow_up_done
                          and job.status in ("Applied", "Interview"))} for prep, job, company in rows]
+
+
+@router.post("/jobs/{job_id}/application-receipt", status_code=201)
+def record_external_receipt(job_id: str, payload: ReceiptInput, db: DB):
+    """Historical recording only; this endpoint never sends an application."""
+    job = get_job(db, job_id, lock=True)
+    prep = db.get(ApplicationPreparation, job_id)
+    if prep and prep.submitted_on:
+        raise HTTPException(409, "Application already recorded")
+    resume = db.get(Resume, payload.resume_id)
+    if resume is None:
+        raise HTTPException(422, "Import the submitted résumé first")
+    if prep is None:
+        prep = ApplicationPreparation(job_id=job_id, verified_facts=[], checklist={}, draft="")
+        db.add(prep)
+    prep.resume_id = resume.id
+    prep.submission_snapshot = {
+        "recording_method": "external_receipt", "confirmed_submitted": True,
+        "reference": payload.reference, "source_url": job.source_url,
+        "resume_id": resume.id, "resume_filename": resume.filename,
+        "previous_status": job.status, "human_approval": job.human_approval,
+        "note": "Receipt records an external submission; it does not assert eligibility or automatic approval.",
+    }
+    prep.submitted_on = payload.submitted_on
+    prep.channel = payload.channel
+    prep.reference = payload.reference
+    prep.notes = payload.notes
+    prep.follow_up_on = payload.follow_up_on
+    prep.follow_up_done = False
+    job.status = "Applied"
+    job.resume_version = resume.filename + "#" + resume.id[:12]
+    db.commit()
+    return response(db, job, prep)
 
 
 @router.patch("/jobs/{job_id}/follow-up")

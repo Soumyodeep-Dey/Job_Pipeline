@@ -2,7 +2,7 @@
 
 A Python, FastAPI and PostgreSQL project for discovering jobs and tracking applications, built in cumulative phases. **Phase 1 remains the foundation; Phase 2 adds discovery on top of it.**
 
-**Current implementation: Phase 7 protected operation and recovery tools.** Phase 1 imports, tracking APIs, filters and duplicate prevention remain available. Phase 3 automatically approves jobs at 80% or higher required-skill coverage against one imported résumé; lower or unknown coverage needs manual approval. Open the dashboard at http://localhost:8000/ and sign in using AUTH_USERNAME / AUTH_PASSWORD from your private .env file. Background discovery, opt-in schedules and in-app notifications are available. Select a résumé, save a readiness checklist, optionally draft from confirmed facts, record manual submissions and track follow-ups. Résumé generation and external application submission are not implemented.
+**Current implementation: Phase 8 target-role discovery controls, building on Phases 1–7.** Phase 1 imports, tracking APIs, filters and duplicate prevention remain available. Phase 3 automatically approves jobs at 80% or higher required-skill coverage against one imported résumé; lower or unknown coverage needs manual approval. Open the dashboard at http://localhost:8000/ and sign in using AUTH_USERNAME / AUTH_PASSWORD from your private .env file. Background discovery, opt-in schedules and in-app notifications are available. Select a résumé, save a readiness checklist, optionally draft from confirmed facts, record manual submissions and track follow-ups. Résumé generation and external application submission are not implemented.
 
 ## All phases and documentation
 
@@ -15,8 +15,9 @@ A Python, FastAPI and PostgreSQL project for discovering jobs and tracking appli
 | 5 — Background automation | Workers, schedules, controlled retries, notifications and monitoring; decide whether n8n is useful | Implemented; schedules opt-in | [Phase 5](docs/PHASE5.md) |
 | 6 — Application preparation and tracking | Verified profile facts, résumé versions, checklists, optional draft assistance and follow-ups | Implemented | [Phase 6](docs/PHASE6.md) |
 | 7 — Reliable deployment | Authentication, deployment, backups, restore testing, monitoring and end-to-end verification | Implemented locally; public deployment configuration prepared | [Phase 7](docs/PHASE7.md) |
+| 8 — Target-role automation and application assistance | Changeable designations, daily Excel-company discovery, current-role filters and preparation checks | Role-directed discovery implemented; PDF tailoring and external submission pending | [Phase 8](docs/PHASE8.md) |
 
-An optional Phase 8 for assisted or automatic submission would require separate scope and explicit approval. It is not required to complete version 1. Future phase boundaries may be refined before implementation.
+Phase 8 is being delivered incrementally. Choose AI Engineer, Data Engineer or custom designations under **Background tasks → Target designations**. The existing worker uses the saved selection; changing a designation never adds unproven résumé skills.
 
 ## Where to start
 
@@ -27,7 +28,7 @@ An optional Phase 8 for assisted or automatic submission would require separate 
 - **Background discovery:** [Phase 5 guide](docs/PHASE5.md), including task recovery, retries, schedules, worker health and notifications.
 - **Application preparation:** [Phase 6 guide](docs/PHASE6.md), including the data flow, checklist, selected-résumé approval, drafts, submission records and follow-ups.
 - **Sign-in, backups and deployment:** [Phase 7 guide](docs/PHASE7.md), including authentication, restore drills, monitoring and HTTPS deployment.
-- **Next milestone:** choose a server/domain if public deployment is needed; continue improving India discovery coverage. Optional Phase 8 submission assistance needs separate scope.
+- **Next milestone:** choose a server/domain if public deployment is needed; continue improving India discovery coverage. Continue Phase 8 with truthful résumé export and supported submission adapters; see the [Phase 8 guide](docs/PHASE8.md).
 
 ## Run the current application
 

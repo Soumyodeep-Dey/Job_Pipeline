@@ -15,6 +15,17 @@ ROLE_WORDS = re.compile(r"\b(engineer|developer|analyst|scientist|intern|consult
 TECHNICAL_TITLE = re.compile(r"\b(software|sde|frontend|front.end|backend|back.end|full.stack|data|ai|machine learning|security|devops|platform)\b", re.I)
 SENIORITY = {"senior", "staff", "principal", "lead", "manager", "director", "architect"}
 
+TARGET_ROLE_ALIASES = {
+    "ai engineer": ["ai engineer", "artificial intelligence engineer", "ai agent engineer", "generative ai engineer", "genai engineer", "llm engineer"],
+    "data engineer": ["data engineer", "data engineering", "etl developer", "etl engineer"],
+}
+
+
+def target_role_matches(title, roles):
+    """A target is a job-title preference, never evidence of a candidate skill."""
+    return [role for role in roles if any(contains(title, alias) for alias in
+            TARGET_ROLE_ALIASES.get(role.casefold(), [role]))]
+
 
 def contains(text, phrase):
     normalized = " ".join(text.casefold().replace("\u2013", "-").replace("\u2014", "-").split())
@@ -114,7 +125,11 @@ def evaluate(posting, company, candidate, configs, weights):
     if hits:
         flags.append("Workbook exclusion terms matched; inspect context")
     disposition = "review_required"
-    if not title_matches and not fallback:
+    target_matches = target_role_matches(title, candidate.target_roles)
+    if candidate.target_roles and not target_matches:
+        flags.append("Job title is outside the selected target designations")
+        disposition = "irrelevant"
+    elif not title_matches and not fallback:
         disposition = "irrelevant"
     elif hits or experience == "mismatch" or location == "mismatch":
         disposition = "excluded"
@@ -125,6 +140,7 @@ def evaluate(posting, company, candidate, configs, weights):
         score = 0
     return {
         "policy_version": "pilot-v1", "score": score, "disposition": disposition,
+        "target_roles": candidate.target_roles, "target_role_matches": target_matches,
         "points": points, "title_matches": title_matches, "exclusion_matches": hits,
         "demonstrated_skill_matches": strong, "adjacent_skill_matches": adjacent,
         "skill_mentions": skill_mentions, "skills_to_review": missing,

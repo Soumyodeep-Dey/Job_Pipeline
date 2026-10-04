@@ -1,3 +1,4 @@
+from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
@@ -13,8 +14,10 @@ class CandidateProfile(BaseModel):
         "Gurgaon", "Noida", "Chennai", "Mumbai", "Delhi",
     ], min_length=1, max_length=100)
     max_experience_years: int = Field(default=2, ge=0, le=20)
+    target_roles: list[str] = Field(default_factory=list, max_length=20)
+    india_work_preference: Literal["unconfirmed", "remote_only", "relocation_office_hybrid"] = "unconfirmed"
 
-    @field_validator("demonstrated_skills", "adjacent_skills", "locations")
+    @field_validator("demonstrated_skills", "adjacent_skills", "locations", "target_roles")
     @classmethod
     def clean_list(cls, values):
         if any(value.strip().casefold() in {"string", "example", "placeholder"} for value in values):
