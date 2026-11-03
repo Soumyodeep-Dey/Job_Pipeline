@@ -2,7 +2,7 @@
 
 A Python, FastAPI and PostgreSQL project for discovering jobs and tracking applications, built in cumulative phases. **Phase 1 remains the foundation; Phase 2 adds discovery on top of it.**
 
-**Current implementation: Phase 8 target-role discovery controls, building on Phases 1–7.** Phase 1 imports, tracking APIs, filters and duplicate prevention remain available. Phase 3 automatically approves jobs at 80% or higher required-skill coverage against one imported résumé; lower or unknown coverage needs manual approval. Open the dashboard at http://localhost:8000/ and sign in using AUTH_USERNAME / AUTH_PASSWORD from your private .env file. Background discovery, opt-in schedules and in-app notifications are available. Select a résumé, save a readiness checklist, optionally draft from confirmed facts, record manual submissions and track follow-ups. Résumé generation and external application submission are not implemented.
+**Current implementation: Phase 9 confirmed applicant profiles and reviewed eligibility, building on Phases 1–8.** Phase 1 imports, tracking APIs, filters and duplicate prevention remain available. Phase 3 automatically approves jobs at 80% or higher required-skill coverage against one imported résumé; lower or unknown coverage needs manual approval. Open the dashboard at http://localhost:8000/ and sign in using AUTH_USERNAME / AUTH_PASSWORD from your private .env file. Background discovery, opt-in schedules and in-app notifications are available. Select a résumé, save a readiness checklist, optionally draft from confirmed facts, record manual submissions and track follow-ups. Job-specific résumé proposals, before-and-after review, approval/rejection, version history and approved PDF/DOCX exports are available. External application submission remains assisted/manual.
 
 ## All phases and documentation
 
@@ -15,9 +15,11 @@ A Python, FastAPI and PostgreSQL project for discovering jobs and tracking appli
 | 5 — Background automation | Workers, schedules, controlled retries, notifications and monitoring; decide whether n8n is useful | Implemented; schedules opt-in | [Phase 5](docs/PHASE5.md) |
 | 6 — Application preparation and tracking | Verified profile facts, résumé versions, checklists, optional draft assistance and follow-ups | Implemented | [Phase 6](docs/PHASE6.md) |
 | 7 — Reliable deployment | Authentication, deployment, backups, restore testing, monitoring and end-to-end verification | Implemented locally; public deployment configuration prepared | [Phase 7](docs/PHASE7.md) |
-| 8 — Target-role automation and application assistance | Changeable designations, daily Excel-company discovery, current-role filters and preparation checks | Role-directed discovery implemented; PDF tailoring and external submission pending | [Phase 8](docs/PHASE8.md) |
+| 8 — Target-role automation and application assistance | Changeable designations, daily discovery, evidence-based résumé proposals, explicit version approval and PDF/DOCX exports | Implemented; external submissions remain assisted/manual | [Phase 8](docs/PHASE8.md) |
 
-Phase 8 is being delivered incrementally. Choose AI Engineer, Data Engineer or custom designations under **Background tasks → Target designations**. The existing worker uses the saved selection; changing a designation never adds unproven résumé skills.
+| 9 — Applicant eligibility | Confirmed profile, reusable answers, reviewed required/preferred conditions, eligibility checks and audit history | Implemented; external submissions remain assisted/manual | [Phase 9](docs/PHASE9.md) |
+
+Phase 8 keeps résumé approval separate from job-match approval. Review and explicitly approve each job-specific version before exporting or using the normal submission-recording flow. Choose AI Engineer, Data Engineer or custom designations under **Background tasks → Target designations**. The existing worker uses the saved selection; changing a designation never adds unproven résumé skills.
 
 ## Where to start
 
@@ -28,7 +30,8 @@ Phase 8 is being delivered incrementally. Choose AI Engineer, Data Engineer or c
 - **Background discovery:** [Phase 5 guide](docs/PHASE5.md), including task recovery, retries, schedules, worker health and notifications.
 - **Application preparation:** [Phase 6 guide](docs/PHASE6.md), including the data flow, checklist, selected-résumé approval, drafts, submission records and follow-ups.
 - **Sign-in, backups and deployment:** [Phase 7 guide](docs/PHASE7.md), including authentication, restore drills, monitoring and HTTPS deployment.
-- **Next milestone:** choose a server/domain if public deployment is needed; continue improving India discovery coverage. Continue Phase 8 with truthful résumé export and supported submission adapters; see the [Phase 8 guide](docs/PHASE8.md).
+- **Applicant profile and eligibility:** [Phase 9 guide](docs/PHASE9.md). Confirm your facts, review the posting requirements, and resolve eligibility blockers before approving a résumé.
+- **Next milestone:** improve India source coverage and implement one tested, user-approved submission adapter. Public deployment remains optional.
 
 ## Run the current application
 
@@ -48,7 +51,7 @@ Invoke-RestMethod 'http://localhost:8000/health'
 Start-Process 'http://localhost:8000/'
 ```
 
-If `docker desktop start` is unavailable, open Docker Desktop from the Start menu. The local `.env` uses PostgreSQL host port **55432** because Windows blocked 5432 during setup; `.env.example` retains 5432 for other machines. The API uses port **8000** unless changed in `.env`.
+If `docker desktop start` is unavailable, open Docker Desktop from the Start menu. The local `.env` uses PostgreSQL host port **15432** because Windows rejected the previous 55432 binding after the Docker update; `.env.example` retains 5432 for other machines. Containers still connect to PostgreSQL internally at `db:5432`. The API uses port **8000** unless changed in `.env`.
 
 Docker startup applies Alembic migrations before launching the API. This is a single-owner authenticated service bound to localhost. The setup script generates private credentials in `.env`; it preserves existing database settings. See [Phase 7](docs/PHASE7.md) for first-time Python setup, sign-in, authenticated API commands and the separate HTTPS deployment configuration. Public hosting has not been activated.
 

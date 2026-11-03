@@ -14,9 +14,19 @@ def prepared(client, session_factory):
         db.commit()
     assert client.post('/jobs', json={"job_id": "apply", "company": "Atlan", "role": "Developer",
                                       "location": "India", "required_skills": "Python, SQL, Docker, Linux, React"}).status_code == 201
+    approve_resume(client)
     return {"resume_id": "strong", "checklist": {"posting_open": True, "location_eligible": True,
                                                  "documents_ready": True},
             "verified_facts": [{"text": "Built a Python API", "evidence": "Portfolio README", "confirmed": True}]}
+
+
+def approve_resume(client, resume_id="strong"):
+    from conftest import confirm_phase9
+    confirm_phase9(client, "apply")
+    proposal = client.post('/jobs/apply/resume-proposals', json={'resume_id': resume_id}).json()
+    result = client.post('/jobs/apply/resume-proposals/' + proposal['id'] + '/review', json={
+        'decision': 'approve', 'content_sha256': proposal['content_sha256'], 'confirmed_truthful': True})
+    assert result.status_code == 200, result.text
 
 
 def submission():
@@ -65,6 +75,7 @@ def test_auto_approval_submission_freezes_exact_version(client, prepared):
 
 
 def test_selected_weak_resume_requires_manual_approval(client, prepared):
+    approve_resume(client, "weak")
     result = client.put('/jobs/apply/preparation', json=prepared | {'resume_id': 'weak'}).json()
     assert result['ready'] is False
     assert result['selected_resume_match_percent'] == 20
@@ -110,6 +121,7 @@ def test_only_confirmed_facts_in_template(client, prepared):
 
 def test_unknown_coverage_manual_and_followup_lifecycle(client, prepared):
     client.post('/jobs/apply/resume-assessment', json={'required_skills': ''})
+    approve_resume(client)
     result = client.put('/jobs/apply/preparation', json=prepared).json()
     assert result['selected_resume_match_percent'] is None
     assert result['ready'] is False

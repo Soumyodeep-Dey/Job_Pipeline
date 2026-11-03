@@ -24,10 +24,11 @@ async function action(control, work) {
 function option(value, text) { const el=node('option',text); el.value=value; return el; }
 statuses.forEach(s => $('filter-status').append(option(s,s)));
 function show(view) {
+  if(view==='profile') loadApplicantProfile().catch(error=>notice(error.message,true));
   if(view==='applications') loadApplications().catch(error=>notice(error.message,true));
-  ['jobs','companies','resumes','automation','applications'].forEach(name => $(name+'-view').hidden = view !== name);
+  ['jobs','companies','resumes','automation','applications','profile'].forEach(name => $(name+'-view').hidden = view !== name);
   document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active',b.dataset.view === view));
-  $('page-title').textContent = {jobs:'Job review',companies:'Companies & discovery',resumes:'Résumé library',automation:'Background tasks',applications:'Applications & follow-ups'}[view];
+  $('page-title').textContent = {jobs:'Job review',companies:'Companies & discovery',resumes:'Résumé library',automation:'Background tasks',applications:'Applications & follow-ups',profile:'Applicant profile'}[view];
 }
 document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => show(b.dataset.view));
 async function allPages(path, size=500) {
@@ -82,6 +83,9 @@ async function openJob(job) {
   const humanLabel=node('label');humanLabel.style.display='block';humanLabel.append(human,document.createTextNode(' I have reviewed and manually approve this job'));
   statusForm.append(statusLabel,humanLabel,node('button','Save decision'));
   statusForm.onsubmit=e=>{e.preventDefault();const body={status:status.value,human_approval:human.checked};action(statusForm,async()=>{await send(`/jobs/${id}`,'PATCH',body);notice('Decision saved. No application was submitted.');await refreshJob(job);});};panel.append(statusForm);
+  await renderEligibility(job,panel,version);
+  if(version!==detailVersion) return;
+  await renderResumeReview(job,panel,version);
   await renderPreparation(job,panel,version);
 }
 async function refreshJob(job) {

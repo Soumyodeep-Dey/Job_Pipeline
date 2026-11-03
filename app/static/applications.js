@@ -34,7 +34,7 @@ async function renderPreparation(job, panel, version) {
   const draft=node('textarea');draft.rows=8;draft.maxLength=20000;draft.value=prep?.draft || '';
   const notes=node('textarea');notes.maxLength=10000;notes.value=prep?.notes || '';
   form.append(labelled('Editable application draft (optional)',draft),labelled('Private preparation notes',notes));
-  form.append(node('p','Saving evaluates this exact résumé. Checklist items confirm practical readiness; 80%+ coverage needs no manual approval. Keep the original PDF available to upload on the employer site.','muted'));
+  form.append(node('p','Saving evaluates this exact résumé. Checklist items confirm practical readiness. 80%+ coverage can approve a job match, but the current job-specific résumé still needs your explicit approval above. Upload that approved export on the employer site.','muted'));
   form.append(node('button','Save preparation'));
   form.onsubmit=e=>{e.preventDefault();action(form,async()=>{
     const verified_facts=facts.value.split('\n').filter(l=>l.trim()).map(line=>{const split=line.indexOf('|');if(split<1)throw new Error('Each fact needs a | followed by its evidence.');return {text:line.slice(0,split).trim(),evidence:line.slice(split+1).trim(),confirmed:confirmed.checked};});

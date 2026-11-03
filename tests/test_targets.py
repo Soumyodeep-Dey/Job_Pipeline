@@ -68,7 +68,7 @@ def test_changed_roles_block_preparation_without_changing_status(session_factory
     with session_factory() as db:
         db.add(MatchingProfile(id=1, settings=CandidateProfile(target_roles=['Data Engineer']).model_dump()))
         db.commit()
-        job = SimpleNamespace(role='Frontend Engineer', status='Approved', human_approval=True)
+        job = SimpleNamespace(job_id='unprepared', role='Frontend Engineer', status='Approved', human_approval=True)
         state = readiness(db, job, None)
         assert 'Job is outside the current target designations' in state['blockers']
         assert job.status == 'Approved'

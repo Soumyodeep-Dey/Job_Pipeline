@@ -9,7 +9,7 @@ from app.automation_routes import worker_health
 from app.database import get_db
 
 router = APIRouter(tags=["Operations"])
-EXPECTED_REVISION = "0005"
+EXPECTED_REVISION = "0007"
 VERSION_TABLE = Table("alembic_version", MetaData(), Column("version_num", String(32)))
 
 

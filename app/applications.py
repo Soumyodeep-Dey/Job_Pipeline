@@ -87,14 +87,27 @@ def readiness(db, job, preparation):
     roles = get_profile(db).target_roles
     if roles and not target_role_matches(job.role, roles) and not (preparation and preparation.submitted_on):
         blockers.append("Job is outside the current target designations")
+    if not (preparation and preparation.submitted_on):
+        from app.phase9 import eligibility
+        result = eligibility(db, job)
+        if result['status'] != 'eligible':
+            blockers.append('Eligibility ' + result['status'].replace('_', ' ') + ': ' + '; '.join(
+                c['message'] for c in result['checks'] if c['state'] != 'pass'))
     score = None
+    from app.tailoring import approved_proposal
+    approved, approval_blocker = approved_proposal(db, job)
+    if not (preparation and preparation.submitted_on):
+        if approval_blocker:
+            blockers.append(approval_blocker)
+        elif preparation and approved.master_id != preparation.resume_id:
+            blockers.append("Preparation must use the approved proposal's master resume")
     if preparation:
         if master_resume_id() and preparation.resume_id != master_resume_id() and not preparation.submitted_on:
             blockers.append("Update preparation to the configured master résumé")
         resume = db.get(Resume, preparation.resume_id)
         requirements = skills_list(job.required_skills)
         if resume and requirements:
-            score = 100 * sum(resume_contains(resume.text, s) for s in requirements) / len(requirements)
+            score = 100 * sum(resume_contains(approved.content if approved else resume.text, s) for s in requirements) / len(requirements)
         for key, label in (("posting_open", "Confirm the posting is still open"),
                            ("location_eligible", "Confirm location/work eligibility"),
                            ("documents_ready", "Have the selected résumé and required documents ready")):
@@ -167,8 +180,18 @@ def record_submission(job_id: str, payload: SubmissionInput, db: DB):
     state = readiness(db, job, preparation)
     if not state["ready"]:
         raise HTTPException(409, state["blockers"])
+    from app.tailoring import approved_proposal
+    approved, _ = approved_proposal(db, job)
     # Freeze what was selected and approved at submission, even after later job edits.
+    from app.phase9 import eligibility, answers
     preparation.submission_snapshot = {
+        "eligibility": eligibility(db, job),
+        "confirmed_application_answers": answers(db),
+        "resume_proposal_id": approved.id,
+        "approved_content_sha256": approved.content_sha256,
+        "pdf_sha256": approved.pdf_sha256, "docx_sha256": approved.docx_sha256,
+        "resume_reviewed_at": approved.reviewed_at.isoformat(),
+        "resume_reviewed_by": approved.reviewed_by,
         "resume_id": preparation.resume_id, "resume_filename": db.get(Resume, preparation.resume_id).filename,
         "required_skills": job.required_skills, "source_url": job.source_url,
         "human_approval": job.human_approval, **state,
@@ -181,6 +204,7 @@ def record_submission(job_id: str, payload: SubmissionInput, db: DB):
     preparation.follow_up_on = payload.follow_up_on
     preparation.follow_up_done = False
     job.status = "Applied"
+    job.resume_version = "proposal:" + approved.id + ":" + approved.content_sha256[:12]
     db.commit()
     return response(db, job, preparation)
 
