@@ -1,74 +1,60 @@
-# Phase 8 — Changeable target roles (first increment)
+# Phase 8 — Target roles and approved job-specific resumes
 
-## What and why
+Phase 8 adds changeable target designations and a persistent resume review workflow. The earlier phases remain in place. Job-match approval and resume wording approval are separate: 80% required-skill coverage never approves wording changes.
 
-Previously, discovery used the same workbook rules regardless of your current career goal. Now you can save AI Engineer, Data Engineer, both, or custom designations in **Background tasks → Target designations**. The setting lives in PostgreSQL and survives Docker restarts. Your selection narrows the workbook search; it never adds skills to your master résumé.
+## What this phase does and why
 
-AI Engineer recognizes AI Agent Engineer, Artificial Intelligence Engineer, Generative AI Engineer, GenAI Engineer and LLM Engineer. Data Engineer recognizes Data Engineering, ETL Developer and ETL Engineer. Custom designations use case-insensitive word-boundary phrases in job titles. Data Scientist and Machine Learning Engineer are distinct targets: add them explicitly if desired. Seniority, location and workbook exclusions still apply.
+1. Save AI Engineer, Data Engineer or custom targets in Background tasks. These preferences narrow workbook discovery without changing proven resume skills. India remains the location preference.
+2. Daily discovery reuses the existing worker and schedules. Imported companies are split into groups of five, staggered by two minutes, repeating daily. The existing 440-company workspace has 88 groups. Source errors and the 300-posting per-company bound remain visible.
+3. Open a job and create a resume proposal from the configured master. The initial proposal adds a short focus line containing only supported explicit required skills and retains the original text. Unknown requirements retain the original text for review. This is conservative, deterministic tailoring, not an AI rewrite.
+4. Inspect the original, proposed text, before-and-after diff, requirement evidence and missing skills. Optionally propose a wording revision with the exact passage to replace, replacement text, a verbatim master source quote and a reason. Quotes are checked for provenance; they do not prove the replacement is semantically true. The reviewer must check every claim.
+5. Explicitly approve or reject the exact content version. The approval request includes its SHA-256 content hash and a truthful-claims confirmation. Approved versions cannot be edited in place. Creating a new proposal supersedes previous pending/approved versions and requires a fresh review.
+6. Approval creates final PDF and DOCX files, stored with file hashes in PostgreSQL. Drafts and rejected versions cannot be exported as approved resumes. Exports use a simple text layout; they do not preserve the master PDF's original visual design or embedded hyperlinks.
+7. Preparation requires the current approved proposal from the selected master, the normal job approval and the eligibility/document checklist. A changed master, job description or required-skill list invalidates approval for future use. Coverage for readiness is calculated from the approved content.
+8. Record a completed external application through the existing workflow. The frozen snapshot includes the exact proposal, content/file hashes, reviewer and approval time. Submitted jobs cannot receive new proposals; their original approved files remain downloadable even if later job facts change.
 
-The confirmed initial preferences are AI Engineer and Data Engineer, with willingness to relocate within India and work in office/hybrid roles. This preference does not establish work authorization, availability, salary expectations or eligibility for a particular posting.
+## Dashboard steps
 
-## Data flow
+Open Job review, select a job, and find **Review job-specific resume** below the job assessment controls. Select the master, create a proposal, expand the original/proposed/diff panels, and inspect the evidence. Use the revision form if needed. Check the truthful-claims confirmation and click **Approve this resume and create exports** only when you approve that exact wording. Download PDF or DOCX, save the application preparation checklist, then apply on the employer site. Record the application only after confirmation.
 
-```mermaid
-flowchart TD
-    A[Save target designations] --> B[PostgreSQL matching profile]
-    C[Excel company list and rules] --> D[Daily batches of up to five companies]
-    D --> E[Existing Docker discovery worker]
-    B --> E
-    E --> F[Official supported job feeds]
-    F --> G[Target title, workbook, location and experience checks]
-    G --> H[Deduplicate and save jobs with evidence]
-    H --> I[Single master résumé coverage]
-    I --> J[80 percent or higher: automatic approval]
-    I --> K[Lower or unknown: manual approval]
-    H --> L[Dashboard target-role filter]
-    L --> M[Preparation and eligibility checklist]
-    M --> N[User submits externally and records application]
-```
+A job marked Approved may still show a resume-review blocker. This is intentional. Rejected proposals require a new version. Creating a fresh proposal from the master discards earlier edits from the new version while preserving their history.
 
-## How to use
+## Data and implementation
 
-1. Open the dashboard and select **Background tasks**.
-2. Enter one designation per line; save the settings.
-3. Click **Enable daily discovery for all Excel companies**. Existing workbook companies are divided into batches of five, staggered by two minutes, repeating every 24 hours. Repeated enable clicks reuse managed schedules. Click enable again after importing additional companies to refresh the batch membership.
-4. Keep Docker Desktop and the Compose services running. The single worker processes batches sequentially. Failed or unsupported sources appear in run results; no source failure means “no vacancies.” Each company is bounded to 300 postings from offset zero. Truncated feeds need additional offset runs using the existing controls.
-5. Job review defaults to **My target roles**. Select **All roles / history** to inspect older jobs. Changing designations immediately changes this filter and preparation readiness; it does not rewrite historical scores or evidence. A running discovery run finishes with its captured profile; the next run reads the latest selection.
-6. Pause cancels queued managed target batches and disables their schedules. A running batch finishes. Independently created schedules are unaffected.
+Migration 0006 adds `resume_proposals`. Each record belongs to one job and one imported master and stores an immutable proposed text, master snapshot, job fingerprint, evidence, status, review identity/time and approved export bytes with hashes. The original 12 job business fields stay unchanged. Existing applications, including Observe.AI, are preserved.
 
-The configured master remains Soumyodeep_Dey_AI_Full Stack.pdf. Approval still uses documented required skills, not the designation or a union of résumé versions. Existing preparation is blocked when its job falls outside the current targets. Submitted application records stay frozen.
+FastAPI validates requests; SQLAlchemy and PostgreSQL store records transactionally. Mutating proposal and submission actions lock the job row to serialize changes on PostgreSQL. Python difflib produces reviewable differences. ReportLab creates PDFs and python-docx creates DOCX files after approval. No cloud model or API key is needed. A future LLM may propose better wording, but it must keep the evidence and explicit review gate.
 
-## Implementation and alternatives
+Status progression: pending → approved or rejected. A new proposal supersedes earlier pending/approved versions. Staleness is checked separately against current master and job facts. The dashboard lists the latest 50 versions; records remain stored in the database.
 
-- **FastAPI/Pydantic:** validate settings and expose `/target-settings` and `/target-settings/automation`. A separate frontend framework is unnecessary for this small form.
-- **SQLAlchemy/PostgreSQL JSON:** reuse the matching profile and existing schedule tables, preserving skills and location settings. No migration is required. Separate normalized role tables would be useful if users/accounts are added.
-- **Existing Python worker:** performs scheduled discovery independently of the browser. Celery/Redis or n8n are alternatives if distributed queues or visual workflows become necessary.
-- **Plain JavaScript:** controls the settings, schedule buttons and job filter without a new build tool.
-- **Deterministic title aliases:** explainable and testable; they can miss unusual job titles. Semantic matching could be added later with evidence and evaluation.
+## Endpoints
 
-## Exact PowerShell commands
+- `GET /jobs/{job_id}/resume-proposals`: latest 50 proposals and evidence.
+- `POST /jobs/{job_id}/resume-proposals`: create a pending version; optional supported edits.
+- `POST /jobs/{job_id}/resume-proposals/{proposal_id}/review`: approve or reject the displayed content hash.
+- `GET /jobs/{job_id}/resume-proposals/{proposal_id}/export/pdf`: approved PDF.
+- `GET /jobs/{job_id}/resume-proposals/{proposal_id}/export/docx`: approved DOCX.
+- Existing preparation and application-recording endpoints now enforce current resume approval for the normal workflow.
+
+The historical `application-receipt` endpoint remains an explicit record of an already completed external action. It never submits an application and does not assert that the pipeline approved it. Its purpose is accurate history, not a path for sending unapproved resumes. Direct historical job status updates likewise do not create a submission or an approved artifact.
+
+## Upgrade and checks in PowerShell
 
 ```powershell
 Set-Location 'D:\OFFICIAL WORK\PROJECTS\Somnath Da\Job_Pipeline'
-.\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider
+.\.venv\Scripts\python.exe scripts/backup.py create
 docker compose config --quiet
-docker compose up --build -d --wait
+docker compose build api worker
 docker compose run --rm -e TEST_POSTGRES=1 api python -m pytest -q -p no:cacheprovider
+docker compose up -d --wait
 .\.venv\Scripts\python.exe scripts/smoke.py
 Start-Process 'http://localhost:8000/'
 ```
 
-## Remaining Phase 8 work
+The API startup command runs Alembic before Uvicorn. Keep the pre-upgrade backup. Restore older backups with the corresponding application release; the verification script expects the current revision. Never run `docker compose down -v` as an upgrade step. Local non-Docker tests need the new requirements installed in the virtual environment.
 
-This increment automates role-directed discovery, not external applications. Existing résumé assessment and manual preparation remain available. Truthful job-specific PDF generation, a confirmed applicant answer profile, platform-specific form submission, receipt verification and an application queue with daily submission limits are still to be implemented and tested. Unsupported forms, missing answers, login and CAPTCHA require user action. An 80% skill score does not answer these questions or prove submission.
+## Limits and next phases
 
+No automatic employer submission, broader job-board account connections or Docker Gmail OAuth are added here. Codex Gmail monitoring remains separate. Source access, India eligibility, closed postings and missing form answers still need verification. Export files are final only after the user's approval; they do not establish eligibility or truth beyond the evidence reviewed.
 
-## Assisted external submissions and receipts
-
-An assistant-operated browser can submit a specifically authorized application when the form and applicant facts are available. This is separate from unattended Docker automation. On 4 October 2026, the Observe.AI AI Agent Engineer application in Hyderabad was submitted and confirmed by both the employer page and a Gmail receipt. The master résumé was entered as text through the form's supported manual-entry option because the browser file chooser did not open.
-
-`POST /jobs/{job_id}/application-receipt` records a verified external submission with its imported résumé ID, date, channel and nonblank receipt reference. It does not submit anything, manufacture an approval or claim that readiness checks were satisfied. Duplicate recording is rejected and the receipt snapshot is frozen. This allows accurate history even when the original job's coverage was unknown. The normal preparation workflow keeps its approval checks.
-
-Gmail is connected to Codex and an hourly thread automation monitors replies for tracked applications. This connection and automation do not run inside Docker. The Docker pipeline still needs a separate Gmail OAuth integration to poll email independently of Codex. LinkedIn requires browser sign-in; Naukri, Foundit, Cutshort, Y Combinator and Wellfound accounts are not yet confirmed or connected. Never put passwords, session cookies or OAuth tokens in committed files.
-
-The user requested all eligible matches rather than a fixed daily count. This preference does not enable unattended submissions: each platform still needs a supported, tested flow, confirmed applicant answers, duplicate checks and receipt verification. Local connection status is recorded in ignored `backups/account-connections.json`; it contains no passwords or tokens.
+Next, improve the confirmed applicant profile and requirement extraction, then implement and test one submission adapter with receipts and duplicate protection before expanding to more platforms. Phase 8 delivers the approval and artifact boundary that those adapters must use.

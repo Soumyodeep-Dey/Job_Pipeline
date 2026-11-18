@@ -62,8 +62,8 @@ def verify(path):
             "-U", "postgres", "-d", "postgres", "/tmp/restore.dump")
         revision = run("docker", "exec", name, "psql", "-U", "postgres", "-d", "postgres", "-At", "-c",
                        "SELECT version_num FROM alembic_version")
-        if revision != "0005":
-            raise RuntimeError(f"Expected version 0005, found {revision}; use the matching application release")
+        if revision != "0010":
+            raise RuntimeError(f"Expected version 0010, found {revision}; use the matching application release")
         counts = run("docker", "exec", name, "psql", "-U", "postgres", "-d", "postgres", "-At", "-c",
                      "SELECT 'companies=' || count(*) FROM companies UNION ALL "
                      "SELECT 'jobs=' || count(*) FROM jobs UNION ALL "

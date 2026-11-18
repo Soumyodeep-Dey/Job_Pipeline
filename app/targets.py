@@ -9,6 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.background import now
+from app.dispatch_policy import daily_start
 from app.database import get_db
 from app.discovery.schemas import CandidateProfile
 from app.discovery.service import get_profile
@@ -29,9 +30,11 @@ class Targets(BaseModel):
 def read_targets(db: DB):
     profile = get_profile(db)
     schedules = db.scalars(select(DiscoverySchedule).where(DiscoverySchedule.name.startswith(PREFIX))).all()
+    from app.models import DispatchControl
+    control = db.get(DispatchControl, 1)
     return {"target_roles": profile.target_roles, "india_work_preference": profile.india_work_preference,
             "enabled_batches": sum(s.enabled for s in schedules), "total_batches": len(schedules),
-            "submission_mode": "manual", "presets": ["AI Engineer", "Data Engineer"]}
+            "submission_mode": "automatic" if control and control.enabled else "manual", "presets": ["AI Engineer", "Data Engineer"]}
 
 
 @router.put("/target-settings")
@@ -79,8 +82,7 @@ def configure_automation(payload: AutomationInput, db: DB):
                 schedules.append(schedule)
             schedule.payload = {"company_ids": ids[start:start + 5], "job_offset": 0, "max_jobs_per_company": 300}
             schedule.interval_minutes = 1440
-            if not schedule.enabled:
-                schedule.next_run_at = at + timedelta(minutes=index * 2)
+            schedule.next_run_at = max(at, daily_start(at, index * 2))
             schedule.enabled = True
     else:
         for schedule in schedules:

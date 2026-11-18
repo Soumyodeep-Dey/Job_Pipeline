@@ -49,9 +49,11 @@ def run_discovery(db, request, run_id=None):
                 result["source_attempts"] = attempts
                 raise SourceError("No supported board resolved from the company's official career pages")
             result.update(provider=board.provider, board_url=board.url, career_page=career_page)
-            jobs, errors, truncated = fetch_jobs(board, fetcher, request.max_jobs_per_company, request.job_offset)
+            batch_limit = min(request.max_jobs_per_company, 10) if board.provider == "smartrecruiters" else request.max_jobs_per_company
+            jobs, errors, truncated = fetch_jobs(board, fetcher, batch_limit, request.job_offset)
             result.update(fetched=len(jobs), errors=errors, truncated=truncated)
-            result["next_offset"] = request.job_offset + request.max_jobs_per_company if truncated else None
+            consumed = len(jobs) + len(errors) if board.provider == "smartrecruiters" else batch_limit
+            result["next_offset"] = request.job_offset + consumed if truncated else None
             for posting in jobs:
                 explanation = evaluate(posting, company, candidate, configs, weights)
                 if explanation["disposition"] == "irrelevant":

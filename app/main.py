@@ -33,13 +33,13 @@ async def lifespan(app):
     # Fail early if the explicit migration step has not completed.
     with engine.begin() as connection:
         revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar()
-        if revision != "0005":
-            raise RuntimeError("Run python -m app.migrate before starting Phase 7")
+        if revision != "0010":
+            raise RuntimeError("Run python -m app.migrate before starting Phase 9")
         # Worker-owned tasks can outlive API restarts. Recovery belongs to the worker.
     yield
 
 
-app = FastAPI(title="Job Pipeline — Phase 7", lifespan=lifespan)
+app = FastAPI(title="Job Pipeline - Phase 10.1", lifespan=lifespan)
 app.add_middleware(SecurityMiddleware)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=os.getenv("ALLOWED_HOSTS", "localhost,127.0.0.1").split(","))
 app.include_router(operations_router)
@@ -56,8 +56,16 @@ app.include_router(resume_router)
 app.include_router(coverage_router)
 app.include_router(automation_router)
 app.include_router(application_router)
+from app.tailoring import router as tailoring_router
+app.include_router(tailoring_router)
 from app.targets import router as targets_router
 app.include_router(targets_router)
+from app.phase9 import router as phase9_router
+app.include_router(phase9_router)
+from app.dispatch import router as dispatch_router
+from app.form_questions import router as questions_router
+app.include_router(dispatch_router)
+app.include_router(questions_router)
 DB = Annotated[Session, Depends(get_db)]
 
 

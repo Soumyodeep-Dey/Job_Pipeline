@@ -40,7 +40,7 @@ def main():
     with engine.connect() as lock:
         if not lock.execute(text("SELECT pg_try_advisory_lock(741905)")).scalar():
             raise RuntimeError("Another discovery worker is already running")
-        if lock.execute(text("SELECT version_num FROM alembic_version")).scalar() != "0005":
+        if lock.execute(text("SELECT version_num FROM alembic_version")).scalar() != "0010":
             raise RuntimeError("Run migrations before starting the worker")
         lock.commit()
         with SessionLocal() as db:

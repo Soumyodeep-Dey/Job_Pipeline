@@ -1,6 +1,6 @@
 from datetime import date, datetime, timezone
 
-from sqlalchemy import JSON, Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, String, Text
+from sqlalchemy import LargeBinary, JSON, Boolean, CheckConstraint, Date, DateTime, Float, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -150,3 +150,100 @@ class ApplicationPreparation(Base):
     submission_snapshot: Mapped[dict | None] = mapped_column(JSON)
     follow_up_on: Mapped[date | None] = mapped_column(Date, index=True)
     follow_up_done: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class ResumeProposal(Base):
+    __tablename__ = "resume_proposals"
+    __table_args__ = (CheckConstraint("status IN ('pending', 'approved', 'rejected', 'superseded')", name="valid_proposal_status"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.job_id"), index=True)
+    master_id: Mapped[str] = mapped_column(ForeignKey("resumes.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20))
+    master_text: Mapped[str] = mapped_column(Text)
+    job_fingerprint: Mapped[str] = mapped_column(String(64))
+    content: Mapped[str] = mapped_column(Text)
+    content_sha256: Mapped[str] = mapped_column(String(64))
+    evidence: Mapped[dict] = mapped_column(JSON)
+    pdf: Mapped[bytes | None] = mapped_column(LargeBinary)
+    docx: Mapped[bytes | None] = mapped_column(LargeBinary)
+    pdf_sha256: Mapped[str | None] = mapped_column(String(64))
+    docx_sha256: Mapped[str | None] = mapped_column(String(64))
+
+
+class ApplicantProfile(Base):
+    __tablename__ = "applicant_profiles"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    version: Mapped[int] = mapped_column()
+    data: Mapped[dict] = mapped_column(JSON)
+    confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    confirmed_by: Mapped[str] = mapped_column(Text)
+
+class ApplicantProfileHistory(Base):
+    __tablename__ = "applicant_profile_history"
+    version: Mapped[int] = mapped_column(primary_key=True)
+    data: Mapped[dict] = mapped_column(JSON)
+    confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    confirmed_by: Mapped[str] = mapped_column(Text)
+
+class JobRequirementReview(Base):
+    __tablename__ = "job_requirement_reviews"
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.job_id"), primary_key=True)
+    version: Mapped[int] = mapped_column()
+    data: Mapped[dict] = mapped_column(JSON)
+    source_hash: Mapped[str] = mapped_column(String(64))
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    reviewed_by: Mapped[str] = mapped_column(Text)
+    history: Mapped[list] = mapped_column(JSON, default=list)
+
+class EligibilityAssessment(Base):
+    __tablename__ = "eligibility_assessments"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.job_id"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    result: Mapped[dict] = mapped_column(JSON)
+
+
+class ResumeLibrary(Base):
+    __tablename__ = "resume_library"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    active_id: Mapped[str | None] = mapped_column(ForeignKey("resumes.id"))
+    removed_ids: Mapped[list] = mapped_column(JSON, default=list)
+
+class DispatchControl(Base):
+    __tablename__ = "dispatch_control"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+
+class DispatchAttempt(Base):
+    __tablename__ = "dispatch_attempts"
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.job_id"), primary_key=True)
+    destination: Mapped[str] = mapped_column(Text, unique=True)
+    state: Mapped[str] = mapped_column(String(32))
+    message: Mapped[str] = mapped_column(Text)
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    submission_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class FormQuestion(Base):
+    __tablename__ = "form_questions"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.job_id"), index=True)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    spec: Mapped[dict] = mapped_column(JSON)
+    answer: Mapped[str | None] = mapped_column(Text)
+    profile_version: Mapped[int | None] = mapped_column()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class SavedFormAnswer(Base):
+    __tablename__ = "saved_form_answers"
+    fingerprint: Mapped[str] = mapped_column(String(64), primary_key=True)
+    spec: Mapped[dict] = mapped_column(JSON)
+    answer: Mapped[str] = mapped_column(Text)
+    profile_version: Mapped[int] = mapped_column()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

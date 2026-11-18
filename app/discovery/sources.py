@@ -17,11 +17,12 @@ import httpx
 
 USER_AGENT = "JobPipeline/2.0"
 BOARD_HOSTS = {
+    "careers.smartrecruiters.com": "smartrecruiters", "jobs.smartrecruiters.com": "smartrecruiters",
     "boards.greenhouse.io": "greenhouse", "job-boards.greenhouse.io": "greenhouse",
     "boards.eu.greenhouse.io": "greenhouse-eu", "job-boards.eu.greenhouse.io": "greenhouse-eu",
     "jobs.lever.co": "lever", "jobs.eu.lever.co": "lever-eu", "jobs.ashbyhq.com": "ashby",
 }
-API_HOSTS = {"boards-api.greenhouse.io", "boards-api.eu.greenhouse.io", "api.lever.co", "api.eu.lever.co", "api.ashbyhq.com"}
+API_HOSTS = {"api.smartrecruiters.com", "boards-api.greenhouse.io", "boards-api.eu.greenhouse.io", "api.lever.co", "api.eu.lever.co", "api.ashbyhq.com"}
 
 
 class SourceError(ValueError):
@@ -186,7 +187,7 @@ def resolve_board(career_page, fetcher):
     parser.feed(content.decode("utf-8", errors="replace"))
     boards = {board for link in parser.links if (board := board_from_url(urljoin(final_url, link)))}
     if len(boards) != 1:
-        raise SourceError("Unsupported career page: expected one linked Greenhouse, Lever or Ashby board")
+        raise SourceError("Unsupported career page: expected one linked Greenhouse, Lever, Ashby or SmartRecruiters board")
     return boards.pop()
 
 
@@ -227,6 +228,8 @@ def normalize_job(raw, board):
 
 
 def fetch_jobs(board, fetcher, limit, job_offset=0):
+    if board.provider == "smartrecruiters":
+        return fetch_smartrecruiters(board, fetcher, limit, job_offset)
     if board.provider.startswith("greenhouse"):
         host = "boards-api.eu.greenhouse.io" if board.provider.endswith("-eu") else "boards-api.greenhouse.io"
         endpoint = f"https://{host}/v1/boards/{board.token}/jobs?content=true"
@@ -265,3 +268,37 @@ def fetch_jobs(board, fetcher, limit, job_offset=0):
         except (ValueError, KeyError, TypeError, AttributeError) as exc:
             errors.append(f"Posting {index + 1}: {type(exc).__name__}: {str(exc)[:160]}")
     return jobs, errors, truncated
+
+
+def fetch_smartrecruiters(board, fetcher, limit, job_offset):
+    """Public postings only; ten detail requests per bounded batch."""
+    host = 'api.smartrecruiters.com'
+    base = f'https://{host}/v1/companies/{board.token}/postings'
+    size = min(limit, 10)
+    _, content = fetcher.get(f'{base}?destination=PUBLIC&limit={size}&offset={job_offset}', {host}, public_api=True)
+    try:
+        listing = json.loads(content)
+        records = listing['content']
+        total = int(listing['totalFound'])
+        if not isinstance(records, list) or len(records) > size or total < 0: raise ValueError('Invalid page')
+        if not records and job_offset < total: raise ValueError('Empty page before total')
+    except (ValueError, KeyError, TypeError) as exc:
+        raise SourceError('SmartRecruiters returned an invalid posting list') from exc
+    jobs, errors = [], []
+    for raw in records:
+        try:
+            identifier = str(raw['id'])
+            if not re.fullmatch(r'[A-Za-z0-9_-]{1,100}', identifier): raise ValueError('Invalid posting ID')
+            _, detail = fetcher.get(f'{base}/{identifier}', {host}, public_api=True)
+            item = json.loads(detail)
+            location = item.get('location') or {}
+            sections = item.get('jobAd', {}).get('sections', {})
+            description = plain_text(' '.join(str(v.get('text','')) for v in sections.values() if isinstance(v,dict)))
+            title = item['name']
+            if not isinstance(title,str) or not title.strip(): raise ValueError('Missing title')
+            jobs.append({'external_id':identifier, 'title':title.strip(),
+                         'location':'; '.join(str(location.get(k) or '') if k != 'country' else ('India' if str(location.get(k,'')).lower() == 'in' else str(location.get(k) or '')) for k in ('city','region','country')),
+                         'description':description, 'url':canonical_url(item['postingUrl'])})
+        except (SourceError, ValueError, KeyError, TypeError, AttributeError) as exc:
+            errors.append(f'SmartRecruiters posting detail failed: {str(exc)[:160]}')
+    return jobs, errors, job_offset + len(records) < total

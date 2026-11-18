@@ -58,5 +58,23 @@ services:
     stop_grace_period: 10m
     restart: unless-stopped
 
+  sender:
+    build:
+      context: .
+      target: sender
+    command: ["python", "-m", "app.sender"]
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-job_pipeline}:${POSTGRES_PASSWORD:-local_password}@db:5432/${POSTGRES_DB:-job_pipeline}
+      MASTER_RESUME_ID: ${MASTER_RESUME_ID:-}
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import pathlib,time; p=pathlib.Path('/tmp/sender-heartbeat'); assert p.exists() and time.time()-p.stat().st_mtime < 180"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
 volumes:
   postgres_data:

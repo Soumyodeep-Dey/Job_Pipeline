@@ -67,3 +67,20 @@ def client(session_factory, monkeypatch):
     yield client
     client.close()
     app.dependency_overrides.clear()
+
+
+def confirm_phase9(client, job_id):
+    """Explicit synthetic confirmations for legacy preparation scenarios."""
+    profile=client.get('/applicant-profile').json()
+    if not profile['version']:
+        response=client.put('/applicant-profile',json={'expected_version':0,'confirmed':True,'data':{
+            'full_name':'Test Applicant','india_work_authorized':True,'requires_sponsorship':False,
+            'work_modes':['remote','hybrid','on_site'],'willing_relocate_india':True,
+            'current_city':'Bengaluru','experience_years':2,'notice_days':0}})
+        assert response.status_code==200,response.text
+    req=client.get('/jobs/'+job_id+'/requirements').json()
+    if not req['review_current']:
+        data=req['suggested']['data'] | {'india_eligible':True,'work_mode':'remote','unresolved_requirements':[]}
+        response=client.put('/jobs/'+job_id+'/requirements',json={'expected_version':req['version'],
+            'source_hash':req['source_hash'],'confirmed':True,'review_note':'Confirmed synthetic test requirements','data':data})
+        assert response.status_code==200,response.text
