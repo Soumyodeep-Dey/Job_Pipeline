@@ -204,3 +204,46 @@ class EligibilityAssessment(Base):
     job_id: Mapped[str] = mapped_column(ForeignKey("jobs.job_id"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     result: Mapped[dict] = mapped_column(JSON)
+
+
+class ResumeLibrary(Base):
+    __tablename__ = "resume_library"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    active_id: Mapped[str | None] = mapped_column(ForeignKey("resumes.id"))
+    removed_ids: Mapped[list] = mapped_column(JSON, default=list)
+
+class DispatchControl(Base):
+    __tablename__ = "dispatch_control"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+
+class DispatchAttempt(Base):
+    __tablename__ = "dispatch_attempts"
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.job_id"), primary_key=True)
+    destination: Mapped[str] = mapped_column(Text, unique=True)
+    state: Mapped[str] = mapped_column(String(32))
+    message: Mapped[str] = mapped_column(Text)
+    snapshot: Mapped[dict] = mapped_column(JSON)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+    submission_started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class FormQuestion(Base):
+    __tablename__ = "form_questions"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    job_id: Mapped[str] = mapped_column(ForeignKey("jobs.job_id"), index=True)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    spec: Mapped[dict] = mapped_column(JSON)
+    answer: Mapped[str | None] = mapped_column(Text)
+    profile_version: Mapped[int | None] = mapped_column()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class SavedFormAnswer(Base):
+    __tablename__ = "saved_form_answers"
+    fingerprint: Mapped[str] = mapped_column(String(64), primary_key=True)
+    spec: Mapped[dict] = mapped_column(JSON)
+    answer: Mapped[str] = mapped_column(Text)
+    profile_version: Mapped[int] = mapped_column()
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

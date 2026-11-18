@@ -72,7 +72,7 @@ def test_readiness_and_worker_monitor(client, session_factory):
     assert client.get('/ready', auth=None).status_code == 503
     with session_factory() as db:
         VERSION_TABLE.create(db.connection())
-        db.execute(VERSION_TABLE.insert().values(version_num='0007'))
+        db.execute(VERSION_TABLE.insert().values(version_num='0010'))
         db.commit()
     assert client.get('/ready', auth=None).json() == {'status': 'ready'}
     assert client.get('/operations/health').status_code == 503

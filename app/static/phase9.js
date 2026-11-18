@@ -1,6 +1,6 @@
 /* Confirmed answers and reviewed requirements. No external form submission. */
 const profileFields=[
-  ['full_name','Full name','text'],['email','Email address','email'],['phone','Phone number','text'],
+  ['full_name','Full name','text'],['given_name','First name for employer forms','text'],['family_name','Last name for employer forms','text'],['email','Email address','email'],['phone','Phone number','text'],
   ['current_city','Current city','text'],['linkedin_url','LinkedIn HTTPS URL','url'],['portfolio_url','Portfolio HTTPS URL','url'],
   ['india_work_authorized','Currently authorized to work in India','bool'],['requires_sponsorship','Require employer sponsorship','bool'],
   ['willing_relocate_india','Willing to relocate within India','bool'],['work_modes','Accepted work arrangements','modes'],

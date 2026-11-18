@@ -44,7 +44,7 @@ def stale_reason(db, job, proposal):
     master = db.get(Resume, proposal.master_id)
     if master is None or normalized(master.text) != proposal.master_text:
         return 'Master resume content changed; create a new proposal'
-    if master_resume_id() and master_resume_id() != proposal.master_id:
+    if master_resume_id(db) != proposal.master_id:
         return 'Configured master resume changed; create a new proposal'
     if fingerprint(db, job) != proposal.job_fingerprint:
         return 'Job requirements or description changed; create a new proposal'
@@ -114,8 +114,8 @@ def proposals(job_id: str, db: DB):
 def create_proposal(job_id: str, payload: ProposalInput, db: DB):
     job = get_job(db, job_id, True)
     editable(db, job)
-    selected = master_resume_id() or payload.resume_id
-    if master_resume_id() and payload.resume_id and payload.resume_id != master_resume_id():
+    selected = master_resume_id(db)
+    if master_resume_id(db) and payload.resume_id and payload.resume_id != master_resume_id(db):
         raise HTTPException(422, 'Use the configured master resume')
     master = db.get(Resume, selected) if selected else None
     if master is None:

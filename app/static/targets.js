@@ -3,7 +3,7 @@
   function render(settings) {
     $('target-roles').value = settings.target_roles.join('\n');
     $('target-work').value = settings.india_work_preference;
-    $('target-state').textContent = `${settings.enabled_batches}/${settings.total_batches} daily company batches enabled. External submission: manual.`;
+    $('target-state').textContent = `${settings.enabled_batches}/${settings.total_batches} daily company batches enabled.`;
   }
   api('/target-settings').then(render).catch(error => notice(error.message, true));
   $('target-form').onsubmit = event => {

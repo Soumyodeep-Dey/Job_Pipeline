@@ -7,19 +7,37 @@ import os
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.discovery.matching import ALIASES, contains
-from app.models import Job, Resume, ResumeAssessment
+from app.models import Job, Resume, ResumeAssessment, ResumeLibrary
 
 router = APIRouter()
 RESUME_DIR = Path(__file__).resolve().parent.parent / "resume"
 
 
-def master_resume_id():
-    return os.getenv("MASTER_RESUME_ID", "").strip() or None
+def master_resume_id(db):
+    library = db.get(ResumeLibrary, 1)
+    if library:
+        return library.active_id
+    configured = os.getenv("MASTER_RESUME_ID", "").strip()
+    return configured or db.scalar(select(Resume.id).order_by(Resume.id).limit(1))
+
+
+def lock_library(db):
+    # Serialize even the first write, before the singleton row exists.
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(924162)"))
+    library = db.get(ResumeLibrary, 1, with_for_update=True)
+    if library is None:
+        identifier = master_resume_id(db)
+        active = identifier if identifier and db.get(Resume, identifier) else None
+        library = ResumeLibrary(id=1, active_id=active, removed_ids=[])
+        db.add(library)
+        db.flush()
+    return library
 
 
 def explicit_requirements(description):
@@ -52,7 +70,9 @@ def resume_contains(text, skill):
 def assess(db, job, resume_id=None):
     requirements = skills_list(job.required_skills)
     resumes = list(db.scalars(select(Resume).order_by(Resume.id)))
-    master = master_resume_id()
+    master = master_resume_id(db)
+    if not master:
+        resumes = []
     if master:
         if resume_id and resume_id != master:
             raise ValueError("This workspace uses the configured master résumé; choose that version")
@@ -110,37 +130,76 @@ def store_resume(db, filename, content):
     return {"filename": filename, "status": "imported", "id": identifier}
 
 
-@router.post("/imports/resumes")
-def import_resumes(db: Session = Depends(get_db), file: UploadFile | None = File(default=None)):
-    if file is not None:
-        try:
-            with db.begin_nested():
-                result = store_resume(db, Path(file.filename or "resume.pdf").name,
-                                      file.file.read(10 * 1024 * 1024 + 1))
-            db.commit()
-            return {"results": [result]}
-        except Exception as exc:
-            db.rollback()
-            raise HTTPException(422, "Cannot import résumé: " + str(exc)[:200]) from exc
+def scan_replacement(db, library):
+    if library.active_id:
+        active = db.get(Resume, library.active_id)
+        return [{"filename": active.filename, "status": "duplicate", "id": active.id}]
     results = []
-    for path in sorted(RESUME_DIR.glob("*.pdf")):
+    paths = sorted(RESUME_DIR.glob("*.pdf"), key=lambda path: path.name.casefold())
+    # Prefer the most recently modified valid file. Ties use alphabetical order.
+    paths.sort(key=lambda path: path.stat().st_mtime_ns, reverse=True)
+    for path in paths:
         try:
-            if path.stat().st_size > 10 * 1024 * 1024:
-                raise ValueError("PDF exceeds 10 MB")
+            with path.open("rb") as source:
+                content = source.read(10 * 1024 * 1024 + 1)
+            if sha256(content).hexdigest() in library.removed_ids:
+                continue
             with db.begin_nested():
-                result = store_resume(db, path.name, path.read_bytes())
-            results.append(result)
+                result = store_resume(db, path.name, content)
+            library.active_id = result["id"]
+            results.append({**result, "status": "selected"})
+            break
         except Exception as exc:
             results.append({"filename": path.name, "status": "error", "message": str(exc)[:200]})
+    return results
+
+
+@router.post("/imports/resumes")
+def import_resumes(db: Session = Depends(get_db), file: UploadFile | None = File(default=None)):
+    library = lock_library(db)
+    if file is None:
+        results = scan_replacement(db, library)
+    else:
+        content = file.file.read(10 * 1024 * 1024 + 1)
+        identifier = sha256(content).hexdigest()
+        if library.active_id and library.active_id != identifier:
+            raise HTTPException(409, "Delete the active resume before uploading another")
+        try:
+            result = store_resume(db, Path(file.filename or "resume.pdf").name, content)
+        except Exception as exc:
+            db.rollback()
+            raise HTTPException(422, "Cannot import resume: " + str(exc)[:200]) from exc
+        library.active_id = identifier
+        library.removed_ids = [item for item in library.removed_ids if item != identifier]
+        results = [result]
     db.commit()
-    return {"results": results, "note": "Existing jobs are unchanged; explicitly reassess them if needed."}
+    return {"results": results}
+
+
+@router.delete("/resumes/{resume_id}")
+def delete_resume(resume_id: str, db: Session = Depends(get_db)):
+    library = lock_library(db)
+    if library.active_id != resume_id:
+        raise HTTPException(409, "The active resume changed. Refresh the library.")
+    library.active_id = None
+    library.removed_ids = [*library.removed_ids, resume_id]
+    # Remove automatic decisions based on the deleted resume from open jobs.
+    for job in db.scalars(select(Job).where(Job.status.in_(["New","Shortlisted","Approved"])).with_for_update()):
+        if job.auto_approved and not job.human_approval and job.status == "Approved":
+            job.status = "New"
+        job.auto_approved = False
+        job.resume_match_percent = None
+        job.resume_version = None
+    results = scan_replacement(db, library)
+    db.commit()
+    return {"deleted_id": resume_id, "active_id": library.active_id, "results": results}
 
 
 @router.get("/resumes")
 def list_resumes(include_archived: bool = False, db: Session = Depends(get_db)):
     query = select(Resume).order_by(Resume.filename)
-    if master_resume_id() and not include_archived:
-        query = query.where(Resume.id == master_resume_id())
+    if not include_archived:
+        query = query.where(Resume.id == master_resume_id(db))
     return [{"id": r.id, "filename": r.filename} for r in db.scalars(query)]
 
 

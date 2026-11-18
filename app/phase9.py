@@ -33,6 +33,8 @@ class Strict(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
 
 class ApplicantData(Strict):
+    given_name: str | None = Field(None, min_length=1, max_length=100)
+    family_name: str | None = Field(None, min_length=1, max_length=100)
     full_name: str | None = Field(None, min_length=1, max_length=150)
     email: str | None = Field(None, max_length=254)
     phone: str | None = Field(None, max_length=30)
@@ -148,7 +150,7 @@ def profile_history(db:DB,limit:int=Query(20,ge=1,le=100),offset:int=Query(0,ge=
     return [profile_response(r) for r in db.scalars(select(ApplicantProfileHistory).order_by(ApplicantProfileHistory.version.desc()).offset(offset).limit(limit))]
 
 QUESTIONS={
-    'full_name':'Full name','email':'Email address','phone':'Phone number','current_city':'Current city',
+    'given_name':'First name','family_name':'Last name','full_name':'Full name','email':'Email address','phone':'Phone number','current_city':'Current city',
     'linkedin_url':'LinkedIn profile','portfolio_url':'Portfolio website',
     'india_work_authorized':'Are you currently authorized to work in India?',
     'requires_sponsorship':'Do you require employer sponsorship?',
@@ -299,10 +301,7 @@ def eligibility(db,job):
             available=p.get('available_from')
             add('availability','unknown' if available is None else 'pass' if available<=r['start_by'] else 'fail','Compare confirmed availability with required start date',{'start_by':r['start_by'],'available_from':available})
         for item in r.get('unresolved_requirements',[]): add('unresolved','unknown',item)
-    resume=db.get(Resume,master_resume_id()) if master_resume_id() else None
-    if resume is None and not master_resume_id():
-        all_resumes=db.scalars(select(Resume).limit(2)).all()
-        if len(all_resumes)==1: resume=all_resumes[0]
+    resume=db.get(Resume,master_resume_id(db)) if master_resume_id(db) else None
     required=skills_list(','.join(r.get('required_skills',[]))) if reviewed else []
     preferred=skills_list(','.join(r.get('preferred_skills',[]))) if reviewed else []
     matched=[s for s in required if resume and resume_contains(resume.text,s)]

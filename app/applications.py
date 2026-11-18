@@ -102,7 +102,7 @@ def readiness(db, job, preparation):
         elif preparation and approved.master_id != preparation.resume_id:
             blockers.append("Preparation must use the approved proposal's master resume")
     if preparation:
-        if master_resume_id() and preparation.resume_id != master_resume_id() and not preparation.submitted_on:
+        if preparation.resume_id != master_resume_id(db) and not preparation.submitted_on:
             blockers.append("Update preparation to the configured master résumé")
         resume = db.get(Resume, preparation.resume_id)
         requirements = skills_list(job.required_skills)
@@ -138,12 +138,12 @@ def get_preparation(job_id: str, db: DB):
 
 @router.put("/jobs/{job_id}/preparation")
 def save_preparation(job_id: str, payload: PreparationInput, db: DB):
-    if master_resume_id() and payload.resume_id != master_resume_id():
-        raise HTTPException(422, "Choose the configured master résumé for new preparations")
     job = get_job(db, job_id, lock=True)
     preparation = db.get(ApplicationPreparation, job_id)
     if preparation and preparation.submitted_on:
         raise HTTPException(409, "Submitted preparation is frozen; update follow-up or job status instead")
+    if payload.resume_id != master_resume_id(db):
+        raise HTTPException(422, "Choose the configured master résumé for new preparations")
     resume = db.get(Resume, payload.resume_id)
     if resume is None:
         raise HTTPException(422, "Import this résumé first")

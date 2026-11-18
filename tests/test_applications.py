@@ -74,7 +74,8 @@ def test_auto_approval_submission_freezes_exact_version(client, prepared):
     assert len(client.get('/applications').json()) == 1
 
 
-def test_selected_weak_resume_requires_manual_approval(client, prepared):
+def test_selected_weak_resume_requires_manual_approval(client, prepared, monkeypatch):
+    monkeypatch.setenv("MASTER_RESUME_ID","weak")
     approve_resume(client, "weak")
     result = client.put('/jobs/apply/preparation', json=prepared | {'resume_id': 'weak'}).json()
     assert result['ready'] is False

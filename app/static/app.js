@@ -24,6 +24,7 @@ async function action(control, work) {
 function option(value, text) { const el=node('option',text); el.value=value; return el; }
 statuses.forEach(s => $('filter-status').append(option(s,s)));
 function show(view) {
+  if(view==='automation')loadDispatch().catch(e=>notice(e.message,true));
   if(view==='profile') loadApplicantProfile().catch(error=>notice(error.message,true));
   if(view==='applications') loadApplications().catch(error=>notice(error.message,true));
   ['jobs','companies','resumes','automation','applications','profile'].forEach(name => $(name+'-view').hidden = view !== name);
@@ -67,7 +68,7 @@ async function openJob(job) {
   panel.append(node('span',approval.status,'badge'),node('span',`Approval: ${approval.method}`,'badge'));
   panel.append(node('p',`Résumé coverage: ${approval.resume_match_percent == null ? 'Unknown' : approval.resume_match_percent.toFixed(1)+'%'} · Suitability: ${job.match_score ?? 'Unknown'}`));
   if(job.source_url) { try { const url=new URL(job.source_url); if(['http:','https:'].includes(url.protocol)){const a=node('a','Open original posting ↗'); a.href=url.href;a.target='_blank';a.rel='noopener noreferrer';panel.append(a);} } catch {} }
-  const description=node('details'); description.open=true;description.append(node('summary','Job description'),node('p',evidence?.description || 'No discovery description is stored for this job. Use the original posting to verify requirements.','description'));panel.append(description);
+  const description=node('details'); description.open=true;description.append(node('summary','Job description'),node('p',evidence?.description || 'No discovery description is stored for this job. Use the original posting to verify requirements.','description'));panel.append(description);if(evidence?.explanation?.disposition==='excluded')panel.append(node('p','Discovery excluded this posting using matching rules. A Rejected tracking status alone is not evidence of an employer rejection.','muted'));
   if(evidence) panel.append(jsonDetails('Discovery explanation & warnings',evidence.explanation));
   panel.append(jsonDetails('Résumé assessment history',history));
   const form=node('form'); const skills=node('textarea'); skills.value=job.required_skills || '';skills.maxLength=10000;
@@ -82,7 +83,10 @@ async function openJob(job) {
   const human=node('input');human.type='checkbox';human.checked=approval.human_approval;human.style.width='auto';
   const humanLabel=node('label');humanLabel.style.display='block';humanLabel.append(human,document.createTextNode(' I have reviewed and manually approve this job'));
   statusForm.append(statusLabel,humanLabel,node('button','Save decision'));
-  statusForm.onsubmit=e=>{e.preventDefault();const body={status:status.value,human_approval:human.checked};action(statusForm,async()=>{await send(`/jobs/${id}`,'PATCH',body);notice('Decision saved. No application was submitted.');await refreshJob(job);});};panel.append(statusForm);
+  statusForm.onsubmit=e=>{e.preventDefault();const body={status:status.value,human_approval:human.checked};action(statusForm,async()=>{await send(`/jobs/${id}`,'PATCH',body);notice('Decision saved. Check automatic application readiness below.');await refreshJob(job);});};panel.append(statusForm);
+  const dispatch=await api('/jobs/'+id+'/dispatch');
+  if(version!==detailVersion)return;
+  panel.append(jsonDetails('Automatic application readiness',dispatch));
   await renderEligibility(job,panel,version);
   if(version!==detailVersion) return;
   await renderResumeReview(job,panel,version);
@@ -112,10 +116,26 @@ function runCard(run) {
 async function loadRuns(){const runs=await api('/discovery/runs?limit=20');$('run-list').replaceChildren(...runs.map(runCard));if(!runs.length)$('run-list').append(node('p','No discovery runs yet.','empty'));}
 $('discovery-form').onsubmit=e=>{e.preventDefault();const body={company_ids:[...selectedCompanies],max_jobs_per_company:Number($('discovery-limit').value),job_offset:Number($('discovery-offset').value)};action($('discovery-form'),async()=>{if(!body.company_ids.length)throw new Error('Select at least one company.');const task=await send('/discovery/tasks','POST',body);$('discovery-result').replaceChildren(node('p',`Task ${task.id} queued. Open Background tasks to follow progress.`));notice('Discovery queued. You can close the browser; the worker will continue.');document.dispatchEvent(new Event('tasks-changed'));});};
 $('audit').onclick=()=>action($('discovery-form'),async()=>{if(!selectedCompanies.size)throw new Error('Select at least one company.');notice('Checking official career sources…');const result=await send('/discovery/source-audits','POST',{company_ids:[...selectedCompanies]});const report=jsonDetails('Career source audit',result);report.open=true;$('discovery-result').replaceChildren(report);notice('Source check finished.');});
-async function loadResumes(){resumes=await api('/resumes');$('resume-count').textContent=`${resumes.length} versions`;$('resume-list').replaceChildren(...resumes.map(r=>{const card=node('div',undefined,'card');card.append(node('strong',r.filename),node('p',`Version ${r.id.slice(0,12)}`,'muted'));return card;}));if(!resumes.length)$('resume-list').append(node('p','No résumés imported yet. Upload a PDF or scan the folder.','empty'));}
+async function loadResumes(){resumes=await api('/resumes');$('resume-count').textContent=`${resumes.length} versions`;$('resume-list').replaceChildren(...resumes.map(r=>{const card=node('div',undefined,'card');const remove=node('button','Delete active résumé and scan for replacement','secondary');
+    remove.onclick=()=>action(remove,async()=>{
+      if(!confirm('Remove this résumé from active use and scan for the newest remaining PDF? Original files and application history are kept.'))return;
+      const result=await api('/resumes/'+encodeURIComponent(r.id),{method:'DELETE'});
+      await loadResumes();if(selected)await refreshJob(selected);
+      notice(result.active_id?'Replacement résumé selected.':'No replacement found. Upload a PDF or scan again.');
+    });card.append(remove,node('strong',r.filename),node('p',`Version ${r.id.slice(0,12)}`,'muted'));return card;}));if(!resumes.length)$('resume-list').append(node('p','No résumés imported yet. Upload a PDF or scan the folder.','empty'));}
 async function importResume(file){const body=new FormData();if(file)body.append('file',file);notice('Importing résumés…');const result=await api('/imports/resumes',{method:'POST',body});$('resume-results').replaceChildren(...result.results.map(r=>node('p',`${r.filename}: ${r.status}${r.message?' — '+r.message:''}`)));await loadResumes();notice('Import finished. Existing decisions have not changed.');}
 $('resume-form').onsubmit=e=>{e.preventDefault();const file=$('resume-file').files[0];action($('resume-form'),async()=>{if(!file)throw new Error('Choose a PDF.');if(file.size>10*1024*1024)throw new Error('The PDF exceeds 10 MB.');await importResume(file);$('resume-file').value='';});};
 $('rescan').onclick=()=>action($('resume-form'),()=>importResume());
-async function loadWorkspace(){notice('Loading workspace…');const results=await Promise.allSettled([loadJobs(),loadResumes(),loadRuns(),(async()=>{[companies,coverage]=await Promise.all([allPages('/companies'),allPages('/discovery/coverage')]);renderCompanies();})()]);const errors=results.filter(r=>r.status==='rejected');notice(errors.length?errors.map(r=>r.reason.message).join(' · '):'Workspace ready.',errors.length>0);}
+async function loadDiagnostics(){
+  const report=await api('/discovery/diagnostics'), f=report.funnel;
+  const summary=`${f.stored_jobs} stored / ${f.india_visible} visible India jobs / ${f.india_target_visible} matching target roles. ${f.legacy_rejected_with_discovery_exclusion} Rejected records have discovery-exclusion evidence; these are not confirmed employer outcomes.`;
+  if($('discovery-funnel'))$('discovery-funnel').textContent=summary+' Counts are before other filters.';
+  const panel=$('source-diagnostics');panel.replaceChildren(node('p',summary));
+  const filter=node('select');filter.append(option('','All source results'));Object.entries(report.source_summary).forEach(([key,count])=>filter.append(option(key,`${key} (${count})`)));
+  const list=node('div');const render=()=>{list.replaceChildren();for(const item of report.companies.filter(r=>!filter.value||r.category===filter.value)){const details=jsonDetails(`${item.company} / ${item.category}`,item);list.append(details);}};
+  const drawer=node('details');drawer.append(node('summary',`Review discovery coverage for ${report.companies.length} companies`),labelled('Source result filter',filter),node('p',report.note,'muted'),list);
+  filter.onchange=render;drawer.ontoggle=()=>{if(drawer.open)render();};panel.append(drawer);
+}
+async function loadWorkspace(){notice('Loading workspace…');const results=await Promise.allSettled([loadJobs(),loadResumes(),loadRuns(),loadDiagnostics(),(async()=>{[companies,coverage]=await Promise.all([allPages('/companies'),allPages('/discovery/coverage')]);renderCompanies();})()]);const errors=results.filter(r=>r.status==='rejected');notice(errors.length?errors.map(r=>r.reason.message).join(' · '):'Workspace ready.',errors.length>0);}
 $('refresh').onclick=()=>action($('refresh'),async()=>{await loadWorkspace();if(selected)await refreshJob(selected);});
 loadWorkspace();

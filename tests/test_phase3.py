@@ -35,14 +35,17 @@ def test_threshold(client, session_factory, requirements, status, score):
         assert client.patch("/jobs/j", json={"status": "Approved", "human_approval": True}).status_code == 200
 
 
-def test_independent_versions_and_reassessment(client, session_factory):
+def test_independent_versions_and_reassessment(client, session_factory, monkeypatch):
     seed(session_factory, "Python SQL", "a")
     seed(session_factory, "Docker Linux", "b")
     client.post("/jobs", json={"job_id": "j", "company": "Atlan", "role": "Dev", "required_skills": "Python,SQL,Docker,Linux"})
     assert client.get("/jobs").json()[0]["status"] == "New"  # Never union résumés.
     seed(session_factory, "Python SQL Docker Linux", "c")
     assert client.get("/jobs").json()[0]["status"] == "New"  # No silent retroactive approval.
+    monkeypatch.setenv("MASTER_RESUME_ID", "c")
     assert client.post("/jobs/j/resume-assessment", json={}).json()["status"] == "Approved"
+    assert client.post("/jobs/j/resume-assessment", json={"resume_id": "a"}).status_code == 422
+    monkeypatch.setenv("MASTER_RESUME_ID", "a")
     assert client.post("/jobs/j/resume-assessment", json={"resume_id": "a"}).json()["status"] == "New"
     assert len(client.get("/jobs/j/resume-assessments").json()) == 3
     assert client.post("/jobs/j/resume-assessment", json={"resume_id": "missing"}).status_code == 422
@@ -90,14 +93,19 @@ def test_resume_upload_and_rescan(client, monkeypatch, tmp_path):
         pages=[SimpleNamespace(extract_text=lambda: "Python SQL developer experience " * 10)]))
     monkeypatch.setattr(resumes, "RESUME_DIR", tmp_path)
     (tmp_path / "first.pdf").write_bytes(b"first")
-    assert client.post("/imports/resumes").json()["results"][0]["status"] == "imported"
+    first = client.post("/imports/resumes").json()["results"][0]["id"]
     (tmp_path / "new.pdf").write_bytes(b"new version")
-    results = client.post("/imports/resumes").json()["results"]
-    assert [r["status"] for r in results] == ["duplicate", "imported"]
-    response = client.post("/imports/resumes", files={"file": ("uploaded.pdf", b"third", "application/pdf")})
-    assert response.json()["results"][0]["status"] == "imported"
-    assert len(client.get("/resumes").json()) == 3
+    assert len(client.get("/resumes").json()) == 1
+    assert client.post("/imports/resumes", files={"file": ("third.pdf", b"third")}).status_code == 409
+    replacement = client.delete("/resumes/" + first).json()["active_id"]
+    assert replacement and replacement != first
+    assert client.delete("/resumes/" + first).status_code == 409
+    assert client.get("/resumes").json() == [{"filename":"new.pdf","id":replacement}]
+    assert client.delete("/resumes/" + replacement).json()["active_id"] is None
+    assert client.post("/imports/resumes").json()["results"] == []
+    assert client.get("/resumes").json() == []
     assert client.post("/imports/resumes", files={"file": ("bad.txt", b"bad")}).status_code == 422
+
 
 
 def test_remote_country_is_not_india():

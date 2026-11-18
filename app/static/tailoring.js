@@ -54,7 +54,7 @@ async function renderResumeReview(job, panel, version) {
     approve.onclick=()=>action(approve,async()=>{
       if(!confirmed.checked)throw new Error('Review the proposed text and confirm its claims first.');
       await send(`${path}/${current.id}/review`,'POST',{decision:'approve',content_sha256:current.content_sha256,confirmed_truthful:true});
-      notice('Exact version approved. PDF and DOCX exports are ready; no application was sent.');await refreshJob(job);
+      notice('Exact version approved. The sender can now use this PDF when the job is ready.');await refreshJob(job);
     });
     reject.onclick=()=>action(reject,async()=>{await send(`${path}/${current.id}/review`,'POST',{decision:'reject',content_sha256:current.content_sha256});await refreshJob(job);});
     section.append(approve,reject);

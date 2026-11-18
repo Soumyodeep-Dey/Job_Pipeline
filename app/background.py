@@ -5,6 +5,7 @@ from uuid import uuid4
 from sqlalchemy import select
 
 from app.discovery.schemas import DiscoveryRequest
+from app.dispatch_policy import daily_start, MANAGED_PREFIX
 from app.discovery.service import run_discovery
 from app.models import BackgroundTask, DiscoverySchedule, DiscoveryRun, Notification
 
@@ -34,12 +35,20 @@ def schedule_due(db, at=None):
     schedules = db.scalars(select(DiscoverySchedule).where(DiscoverySchedule.enabled.is_(True),
         DiscoverySchedule.next_run_at <= at).with_for_update(skip_locked=True)).all()
     for schedule in schedules:
+        start = None
+        if schedule.name.startswith(MANAGED_PREFIX):
+            number = schedule.name.removeprefix(MANAGED_PREFIX)
+            if number.isdigit():
+                start = daily_start(at, (int(number) - 1) * 2)
+                if at < start:
+                    schedule.next_run_at = start
+                    continue
         pending = db.scalar(select(BackgroundTask.id).where(BackgroundTask.schedule_id == schedule.id,
                                 BackgroundTask.status.in_(["queued", "running"])))
         if pending is None:
             enqueue(db, schedule.payload, schedule.id, at)
         # Coalesce missed occurrences into one; never replay an offline backlog.
-        schedule.next_run_at = at + timedelta(minutes=schedule.interval_minutes)
+        schedule.next_run_at = start + timedelta(days=1) if start else at + timedelta(minutes=schedule.interval_minutes)
     db.commit()
 
 

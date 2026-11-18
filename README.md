@@ -2,7 +2,7 @@
 
 A Python, FastAPI and PostgreSQL project for discovering jobs and tracking applications, built in cumulative phases. **Phase 1 remains the foundation; Phase 2 adds discovery on top of it.**
 
-**Current implementation: Phase 9 confirmed applicant profiles and reviewed eligibility, building on Phases 1–8.** Phase 1 imports, tracking APIs, filters and duplicate prevention remain available. Phase 3 automatically approves jobs at 80% or higher required-skill coverage against one imported résumé; lower or unknown coverage needs manual approval. Open the dashboard at http://localhost:8000/ and sign in using AUTH_USERNAME / AUTH_PASSWORD from your private .env file. Background discovery, opt-in schedules and in-app notifications are available. Select a résumé, save a readiness checklist, optionally draft from confirmed facts, record manual submissions and track follow-ups. Job-specific résumé proposals, before-and-after review, approval/rejection, version history and approved PDF/DOCX exports are available. External application submission remains assisted/manual.
+**Current implementation: Phase 10.1 — up to five automatic applications per day from 9 AM India time, with a dashboard question inbox and reusable confirmed answers.** Phase 1 imports, tracking APIs, filters and duplicate prevention remain available. Phase 3 automatically approves jobs at 80% or higher required-skill coverage against one imported résumé; lower or unknown coverage needs manual approval. Open the dashboard at http://localhost:8000/ and sign in using AUTH_USERNAME / AUTH_PASSWORD from your private .env file. Background discovery, opt-in schedules and in-app notifications are available. Select a résumé, save a readiness checklist, optionally draft from confirmed facts, record manual submissions and track follow-ups. Job-specific résumé proposals, before-and-after review, approval/rejection, version history and approved PDF/DOCX exports are available. Control automatic sending in Background tasks. Each tailored résumé still requires your approval.
 
 ## All phases and documentation
 
@@ -16,10 +16,15 @@ A Python, FastAPI and PostgreSQL project for discovering jobs and tracking appli
 | 6 — Application preparation and tracking | Verified profile facts, résumé versions, checklists, optional draft assistance and follow-ups | Implemented | [Phase 6](docs/PHASE6.md) |
 | 7 — Reliable deployment | Authentication, deployment, backups, restore testing, monitoring and end-to-end verification | Implemented locally; public deployment configuration prepared | [Phase 7](docs/PHASE7.md) |
 | 8 — Target-role automation and application assistance | Changeable designations, daily discovery, evidence-based résumé proposals, explicit version approval and PDF/DOCX exports | Implemented; external submissions remain assisted/manual | [Phase 8](docs/PHASE8.md) |
-
 | 9 — Applicant eligibility | Confirmed profile, reusable answers, reviewed required/preferred conditions, eligibility checks and audit history | Implemented; external submissions remain assisted/manual | [Phase 9](docs/PHASE9.md) |
+| 9.1 — Discovery coverage | Company source diagnostics, India visibility funnel, exclusion provenance and public SmartRecruiters connector | Implemented with source limitations | [Phase 9.1](docs/PHASE9_1.md) |
+| 9.2 — Résumé library | Delete the active résumé and scan for its replacement | Implemented | [Phase 9.2](docs/PHASE9_2.md) |
+| 10 — Automatic applications | Docker sender, posting and approval checks, duplicate prevention and receipt reconciliation | Implemented for supported hosted forms | [Phase 10](docs/PHASE10.md) |
+| 10.1 — Daily allowance and answers | 9 AM IST start, five-send daily cap, employer questions and exact-answer reuse | Implemented for supported forms | [Phase 10.1](docs/PHASE10_1.md) |
 
 Phase 8 keeps résumé approval separate from job-match approval. Review and explicitly approve each job-specific version before exporting or using the normal submission-recording flow. Choose AI Engineer, Data Engineer or custom designations under **Background tasks → Target designations**. The existing worker uses the saved selection; changing a designation never adds unproven résumé skills.
+
+The [daily phone reminder guide](docs/PHASE10_1.md#daily-phone-reminder) explains the 08:50 IST alert, how to record an offline reason, and how to resume applications when you start Docker later.
 
 ## Where to start
 
@@ -31,7 +36,7 @@ Phase 8 keeps résumé approval separate from job-match approval. Review and exp
 - **Application preparation:** [Phase 6 guide](docs/PHASE6.md), including the data flow, checklist, selected-résumé approval, drafts, submission records and follow-ups.
 - **Sign-in, backups and deployment:** [Phase 7 guide](docs/PHASE7.md), including authentication, restore drills, monitoring and HTTPS deployment.
 - **Applicant profile and eligibility:** [Phase 9 guide](docs/PHASE9.md). Confirm your facts, review the posting requirements, and resolve eligibility blockers before approving a résumé.
-- **Next milestone:** improve India source coverage and implement one tested, user-approved submission adapter. Public deployment remains optional.
+- **Phase 10:** [Automatic application setup, verification and coverage](docs/PHASE10.md). Public deployment remains optional.
 
 ## Run the current application
 
